@@ -1,0 +1,19 @@
+node_modules/
+out/
+dist/
+release/
+*.log
+
+# 编辑器 / 系统文件
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 本地环境变量
+.env
+.env.*
+
+# npm 临时
+npm-debug.log*
+yarn-error.log*

@@ -1,0 +1,17 @@
+export const IPC = {
+  CONFIG_GET: 'config:get',
+  CONFIG_SAVE: 'config:save',
+  PACK_LIST: 'pack:list',
+  PACK_SWITCH: 'pack:switch',
+  PET_GET_STATE: 'pet:get-state',
+  PET_EVENT: 'pet:event',
+  PET_MOVE: 'pet:move',
+  CHAT_SEND: 'chat:send',
+  CHAT_GET_HISTORY: 'chat:get-history',
+  OBSIDIAN_GET_TODOS: 'obsidian:get-todos',
+  OBSIDIAN_ADD_TODO: 'obsidian:add-todo',
+  OBSIDIAN_COMPLETE_TODO: 'obsidian:complete-todo',
+  WINDOW_OPEN_PANEL: 'window:open-panel',
+  WINDOW_CLOSE_PANEL: 'window:close-panel',
+  WINDOW_QUIT: 'window:quit',
+} as const
