@@ -39,6 +39,14 @@ export interface ObsidianConfig {
   baseFile: string
 }
 
+export interface TriggerConfig {
+  enabled: boolean
+  idleAfterMinutes: number
+  sleepAfterMinutes: number
+  idleCooldownMinutes: number
+  phrases: Record<string, string[]>
+}
+
 export interface PetWindowState {
   packId: string
   action: string
@@ -54,6 +62,7 @@ export interface AppConfig {
   obsidian: ObsidianConfig
   currentPackId: string
   petPosition: { x: number; y: number; scale: number }
+  triggers: TriggerConfig
   reminders: {
     enabled: boolean
     minIntervalMinutes: number
@@ -65,7 +74,7 @@ export interface AppConfig {
 }
 
 export interface ChatMessage {
-  role: 'user' | 'assistant'
+  role: 'system' | 'user' | 'assistant'
   content: string
   timestamp: number
 }

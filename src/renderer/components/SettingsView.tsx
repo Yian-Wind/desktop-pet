@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Save } from 'lucide-react'
+import { Save, FlaskConical } from 'lucide-react'
 import type { AppConfig } from '../../shared/types'
 
 export function SettingsView() {
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [packs, setPacks] = useState<Array<{ manifest: { id: string; name: string; type: string } }>>([])
   const [saved, setSaved] = useState(false)
+  const [testResult, setTestResult] = useState<string | null>(null)
+  const [testing, setTesting] = useState(false)
 
   useEffect(() => {
     void Promise.all([window.petApi.getConfig(), window.petApi.listPacks()]).then(([cfg, packList]) => {
@@ -29,13 +31,58 @@ export function SettingsView() {
     update({ obsidian: { ...config.obsidian, ...patch } })
   }
 
+  function updateTriggers(patch: Partial<AppConfig['triggers']>) {
+    update({ triggers: { ...config.triggers, ...patch } })
+  }
+
+  function updatePhrase(key: string, index: number, value: string) {
+    const next = { ...config.triggers.phrases }
+    const list = [...(next[key] ?? [])]
+    list[index] = value
+    next[key] = list
+    update({ triggers: { ...config.triggers, phrases: next } })
+  }
+
+  function addPhrase(key: string) {
+    const next = { ...config.triggers.phrases }
+    next[key] = [...(next[key] ?? []), '']
+    update({ triggers: { ...config.triggers, phrases: next } })
+  }
+
+  function removePhrase(key: string, index: number) {
+    const next = { ...config.triggers.phrases }
+    const list = [...(next[key] ?? [])]
+    list.splice(index, 1)
+    next[key] = list
+    update({ triggers: { ...config.triggers, phrases: next } })
+  }
+
   function updateReminders(patch: Partial<AppConfig['reminders']>) {
     update({ reminders: { ...config.reminders, ...patch } })
   }
 
   async function save() {
     await window.petApi.saveConfig(config)
+    window.petApi.setPetSize(config.petPosition.scale)
     setSaved(true)
+  }
+
+  async function runTest() {
+    setTesting(true)
+    setTestResult(null)
+    const res = await window.petApi.testChat()
+    if (res.ok) setTestResult(res.reply ?? 'OK')
+    else setTestResult(res.error ?? '测试失败')
+    setTesting(false)
+  }
+
+  const triggerKeys = ['click', 'drag-end', 'idle', 'sleep', 'wake'] as const
+  const triggerLabels: Record<string, string> = {
+    click: '点击',
+    'drag-end': '拖拽结束',
+    idle: '空闲',
+    sleep: '睡觉',
+    wake: '唤醒'
   }
 
   return (
@@ -51,6 +98,12 @@ export function SettingsView() {
         <label>Model
           <input value={config.api.model} onChange={(e) => updateApi({ model: e.target.value })} placeholder="model-name" />
         </label>
+        <div className="settings-row">
+          <button className="secondary-button" onClick={() => void runTest()} disabled={testing}>
+            <FlaskConical size={15} /> {testing ? '测试中…' : '测试扮演'}
+          </button>
+          {testResult ? <span className="test-result">{testResult}</span> : null}
+        </div>
       </section>
 
       <section className="settings-section">
@@ -76,6 +129,48 @@ export function SettingsView() {
             </button>
           ))}
         </div>
+      </section>
+
+      <section className="settings-section">
+        <h2>宠物</h2>
+        <label>大小比例（当前 {config.petPosition.scale}×）
+          <input type="range" min={0.5} max={2} step={0.1} value={config.petPosition.scale}
+            onChange={(e) => update({ petPosition: { ...config.petPosition, scale: Number(e.target.value) } })} />
+        </label>
+      </section>
+
+      <section className="settings-section">
+        <h2>触发语料</h2>
+        <label className="checkbox-row">
+          <input type="checkbox" checked={config.triggers.enabled} onChange={(e) => updateTriggers({ enabled: e.target.checked })} />
+          启用主动触发
+        </label>
+        <div className="settings-row">
+          <label>空闲提醒（分钟）
+            <input type="number" min={1} value={config.triggers.idleAfterMinutes}
+              onChange={(e) => updateTriggers({ idleAfterMinutes: Number(e.target.value) })} />
+          </label>
+          <label>睡觉（分钟）
+            <input type="number" min={2} value={config.triggers.sleepAfterMinutes}
+              onChange={(e) => updateTriggers({ sleepAfterMinutes: Number(e.target.value) })} />
+          </label>
+          <label>提醒冷却（分钟）
+            <input type="number" min={1} value={config.triggers.idleCooldownMinutes}
+              onChange={(e) => updateTriggers({ idleCooldownMinutes: Number(e.target.value) })} />
+          </label>
+        </div>
+        {triggerKeys.map((key) => (
+          <div className="phrase-group" key={key}>
+            <label className="phrase-label">{triggerLabels[key]}</label>
+            {(config.triggers.phrases[key] ?? []).map((phrase, i) => (
+              <div className="phrase-row" key={i}>
+                <input value={phrase} onChange={(e) => updatePhrase(key, i, e.target.value)} placeholder="触发语料" />
+                <button className="icon-button" onClick={() => removePhrase(key, i)} title="删除">×</button>
+              </div>
+            ))}
+            <button className="secondary-button phrase-add" onClick={() => addPhrase(key)}>+ 添加</button>
+          </div>
+        ))}
       </section>
 
       <section className="settings-section">

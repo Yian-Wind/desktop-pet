@@ -2,13 +2,26 @@ import { app } from 'electron'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { safeStorage } from 'electron'
-import type { AppConfig, ApiConfig } from '../shared/types'
+import type { AppConfig, ApiConfig, TriggerConfig } from '../shared/types'
 
 const DEFAULT_CONFIG: AppConfig = {
   api: { baseUrl: '', apiKey: '', model: '' },
   obsidian: { vaultPath: '', baseFile: '' },
   currentPackId: 'fairy',
   petPosition: { x: 100, y: 100, scale: 1.0 },
+  triggers: {
+    enabled: true,
+    idleAfterMinutes: 3,
+    sleepAfterMinutes: 10,
+    idleCooldownMinutes: 5,
+    phrases: {
+      click: ['戳到我啦~', '嘿嘿，好痒~', '有事找我吗？'],
+      'drag-end': ['飞起来啦！', '哇啊——', '放我下来！'],
+      idle: ['我在呢~', '今天过得怎么样？', '需要我帮你记点事吗？'],
+      sleep: ['呼...呼...', '让我眯一会儿…', 'Zzz…'],
+      wake: ['我醒啦！', '刚刚睡饱了~', '回来啦！']
+    }
+  },
   reminders: { enabled: true, minIntervalMinutes: 30, startHour: 9, endHour: 22 },
   autostart: false,
   behaviorMode: 'rules'
@@ -42,7 +55,16 @@ export class ConfigStore {
       api: { ...DEFAULT_CONFIG.api, ...raw.api },
       obsidian: { ...DEFAULT_CONFIG.obsidian, ...raw.obsidian },
       petPosition: { ...DEFAULT_CONFIG.petPosition, ...raw.petPosition },
+      triggers: this.mergeTriggers(raw.triggers ?? DEFAULT_CONFIG.triggers),
       reminders: { ...DEFAULT_CONFIG.reminders, ...raw.reminders }
+    }
+  }
+
+  private mergeTriggers(raw: Partial<TriggerConfig>): TriggerConfig {
+    return {
+      ...DEFAULT_CONFIG.triggers,
+      ...raw,
+      phrases: { ...DEFAULT_CONFIG.triggers.phrases, ...(raw.phrases ?? {}) }
     }
   }
 

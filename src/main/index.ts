@@ -33,7 +33,7 @@ if (!gotLock) {
     skills.register(createChatSkill())
     skills.register(createTodoSkill())
 
-    const behavior = new BehaviorEngine((state) => sendToPet('pet:state', state))
+    const behavior = new BehaviorEngine((state) => sendToPet('pet:state', state), config.get().triggers)
     registerIpcHandlers(config, packs, llm, obsidian, skills, behavior)
 
     createPetWindow(config.get().petPosition)

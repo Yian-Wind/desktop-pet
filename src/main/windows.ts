@@ -66,3 +66,17 @@ export function sendToPet(channel: string, payload: unknown): void {
 export function sendToPanel(channel: string, payload: unknown): void {
   panelWindow?.webContents.send(channel, payload)
 }
+
+export function setPetScale(scale: number): void {
+  if (!petWindow || petWindow.isDestroyed()) return
+  const size = Math.round(320 * (scale || 1))
+  const bounds = petWindow.getBounds()
+  const centerX = bounds.x + bounds.width / 2
+  const centerY = bounds.y + bounds.height / 2
+  petWindow.setBounds({
+    x: Math.round(centerX - size / 2),
+    y: Math.round(centerY - size / 2),
+    width: size,
+    height: size
+  })
+}

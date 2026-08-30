@@ -9,7 +9,7 @@ import { SkillBus } from './skill-bus'
 import { createChatSkill } from './skills/chat'
 import { createTodoSkill } from './skills/obsidian-todos'
 import { BehaviorEngine } from './behavior-engine'
-import { getPetWindow, openPanel, sendToPet } from './windows'
+import { getPetWindow, openPanel, sendToPet, setPetScale } from './windows'
 
 export function registerIpcHandlers(
   config: ConfigStore,
@@ -26,6 +26,8 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC.CONFIG_SAVE, (_event, cfg: AppConfig) => {
     config.save(cfg)
     app.setLoginItemSettings({ openAtLogin: cfg.autostart })
+    behavior.setTriggers(cfg.triggers)
+    setPetScale(cfg.petPosition.scale)
     return config.get()
   })
 
@@ -54,6 +56,14 @@ export function registerIpcHandlers(
     config.save({ ...cfg, petPosition: { ...cfg.petPosition, x, y } })
   })
 
+  ipcMain.handle(IPC.PET_SET_SIZE, (_event, scale: number) => {
+    const win = getPetWindow()
+    if (!win || win.isDestroyed()) return
+    setPetScale(scale)
+    const cfg = config.get()
+    config.save({ ...cfg, petPosition: { ...cfg.petPosition, scale } })
+  })
+
   ipcMain.handle(IPC.CHAT_GET_HISTORY, () => chatHistory)
 
   ipcMain.handle(IPC.CHAT_SEND, async (_event, text: string) => {
@@ -63,7 +73,7 @@ export function registerIpcHandlers(
     const userMessage: ChatMessage = { role: 'user', content: text, timestamp: Date.now() }
     const messages: ChatMessage[] = [...chatHistory.slice(-20), userMessage]
     if (persona?.systemPrompt) {
-      messages.unshift({ role: 'assistant', content: persona.systemPrompt, timestamp: Date.now() })
+      messages.unshift({ role: 'system', content: persona.systemPrompt, timestamp: Date.now() })
     }
     const result = await skills.execute('chat', { messages }, {
       config: cfg,
@@ -79,6 +89,28 @@ export function registerIpcHandlers(
     }
     chatHistory.push(userMessage)
     return { error: result.error ?? '对话失败' }
+  })
+
+  ipcMain.handle(IPC.CHAT_TEST, async () => {
+    const cfg = config.get()
+    const pack = packs.get(cfg.currentPackId)
+    const persona = pack?.manifest.persona
+    const system = persona?.systemPrompt ?? '你是一个桌面宠物助手。'
+    const messages: ChatMessage[] = [
+      { role: 'system', content: system, timestamp: Date.now() },
+      { role: 'user', content: '请用你的角色身份做一次自我介绍，并说明你此刻的状态。', timestamp: Date.now() }
+    ]
+    const result = await skills.execute('chat', { messages }, {
+      config: cfg,
+      llm,
+      obsidian,
+      sendPetState: (state) => sendToPet('pet:state', state)
+    })
+    if (result.success && typeof result.data === 'string') {
+      behavior.setBubble(result.data.slice(0, 80))
+      return { ok: true, reply: result.data }
+    }
+    return { ok: false, error: result.error ?? '扮演测试失败' }
   })
 
   ipcMain.handle(IPC.OBSIDIAN_GET_TODOS, async () => {

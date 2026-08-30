@@ -1,4 +1,9 @@
-import type { PetEvent, PetPack, PetWindowState } from '../shared/types'
+import type { PetEvent, PetPack, PetWindowState, TriggerConfig } from '../shared/types'
+
+function pick(arr: string[] | undefined): string | null {
+  if (!arr || arr.length === 0) return null
+  return arr[Math.floor(Math.random() * arr.length)]
+}
 
 export class BehaviorEngine {
   private state: PetWindowState = {
@@ -12,9 +17,26 @@ export class BehaviorEngine {
   }
 
   private idleMinutes = 0
+  private lastIdleBubbleAt = 0
   private idleTimer?: NodeJS.Timeout
+  private triggers: TriggerConfig = {
+    enabled: true,
+    idleAfterMinutes: 3,
+    sleepAfterMinutes: 10,
+    idleCooldownMinutes: 5,
+    phrases: {}
+  }
 
-  constructor(private onState: (state: PetWindowState) => void) {}
+  constructor(
+    private onState: (state: PetWindowState) => void,
+    triggers?: TriggerConfig
+  ) {
+    if (triggers) this.triggers = triggers
+  }
+
+  setTriggers(triggers: TriggerConfig): void {
+    this.triggers = triggers
+  }
 
   start(pack: PetPack): void {
     this.state.packId = pack.manifest.id
@@ -22,10 +44,13 @@ export class BehaviorEngine {
     this.state.action = 'idle'
     this.state.bubble = ''
     this.idleMinutes = 0
+    this.lastIdleBubbleAt = 0
     this.emit()
     this.idleTimer = setInterval(() => {
       this.idleMinutes += 1
-      this.handle({ type: this.idleMinutes >= 8 ? 'sleep' : 'idle' })
+      const shouldSleep = this.triggers.enabled &&
+        this.idleMinutes >= this.triggers.sleepAfterMinutes
+      this.handle({ type: shouldSleep ? 'sleep' : 'idle' })
     }, 60_000)
   }
 
@@ -39,11 +64,12 @@ export class BehaviorEngine {
 
   async handle(event: PetEvent): Promise<void> {
     if (event.type !== 'idle' && event.type !== 'sleep') this.idleMinutes = 0
+    const phrases = this.triggers.phrases
     switch (event.type) {
       case 'click':
         this.state.action = 'click'
         this.state.emotion = 'happy'
-        this.showBubble('戳到我啦~')
+        this.showBubble(pick(phrases.click) ?? '戳到我啦~')
         break
       case 'drag-start':
         this.state.action = 'drag'
@@ -52,19 +78,33 @@ export class BehaviorEngine {
         break
       case 'drag-end':
         this.state.action = 'idle'
-        this.showBubble('飞起来啦！')
+        this.showBubble(pick(phrases['drag-end']) ?? '飞起来啦！')
         break
       case 'sleep':
         this.state.action = 'sleep'
         this.state.emotion = 'sleepy'
-        this.hideBubble()
+        this.showBubble(pick(phrases.sleep) ?? 'Zzz…')
         break
+      case 'idle': {
+        this.state.action = 'idle'
+        this.state.emotion = 'neutral'
+        if (this.triggers.enabled && this.idleMinutes >= this.triggers.idleAfterMinutes) {
+          const now = Date.now()
+          const cooldownMs = this.triggers.idleCooldownMinutes * 60_000
+          if (now - this.lastIdleBubbleAt >= cooldownMs) {
+            this.lastIdleBubbleAt = now
+            this.showBubble(pick(phrases.idle) ?? '我在呢~')
+          }
+        } else if (this.state.bubbleVisible) {
+          this.hideBubble()
+        }
+        break
+      }
       case 'wake':
-      case 'idle':
       default:
         this.state.action = 'idle'
         this.state.emotion = 'neutral'
-        if (this.state.bubbleVisible) this.hideBubble()
+        this.showBubble(pick(phrases.wake) ?? '我醒啦！')
     }
     this.emit()
   }
