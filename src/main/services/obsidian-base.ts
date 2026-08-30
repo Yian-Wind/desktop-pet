@@ -10,15 +10,22 @@ interface BaseFile {
 }
 
 export class ObsidianBaseService {
-  async getTodos(vaultPath: string, baseFile: string): Promise<TodoItem[]> {
-    const root = this.resolveVault(vaultPath, baseFile)
-    const folder = this.extractFolder(baseFile)
-    const scanDir = folder ? join(root, folder) : dirname(baseFile)
-    if (!existsSync(scanDir)) return []
-    return readdirSync(scanDir, { withFileTypes: true })
-      .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
-      .map((entry) => this.parseTodo(join(scanDir, entry.name), entry.name))
-      .filter((todo): todo is TodoItem => todo !== null)
+  async getTodos(vaultPath: string, baseFiles: string[]): Promise<TodoItem[]> {
+    const out: TodoItem[] = []
+    for (const baseFile of baseFiles) {
+      if (!baseFile) continue
+      const root = this.resolveVault(vaultPath, baseFile)
+      const folder = this.extractFolder(baseFile)
+      const scanDir = folder ? join(root, folder) : dirname(baseFile)
+      if (!existsSync(scanDir)) continue
+      const baseName = basename(baseFile)
+      const todos = readdirSync(scanDir, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
+        .map((entry) => this.parseTodo(join(scanDir, entry.name), entry.name, baseName))
+        .filter((todo): todo is TodoItem => todo !== null)
+      out.push(...todos)
+    }
+    return out
   }
 
   async addTodo(vaultPath: string, baseFile: string, title: string, content: string, priority = '', dueDate = ''): Promise<TodoItem> {
@@ -38,7 +45,7 @@ export class ObsidianBaseService {
       content
     ].join('\n')
     writeFileSync(filePath, body, 'utf-8')
-    return this.parseTodo(filePath, `${safeTitle}.md`) as TodoItem
+    return this.parseTodo(filePath, `${safeTitle}.md`, basename(baseFile)) as TodoItem
   }
 
   async completeTodo(filePath: string, completed: boolean): Promise<void> {
@@ -48,7 +55,7 @@ export class ObsidianBaseService {
     writeFileSync(filePath, `---\n${yaml.dump(data)}---\n\n${parsed.content}`, 'utf-8')
   }
 
-  private parseTodo(filePath: string, name: string): TodoItem | null {
+  private parseTodo(filePath: string, name: string, baseName?: string): TodoItem | null {
     try {
       const parsed = matter(readFileSync(filePath, 'utf-8'))
       return {
@@ -57,7 +64,8 @@ export class ObsidianBaseService {
         content: parsed.content.trim(),
         completed: parsed.data['完成'] === true,
         priority: String(parsed.data['紧急程度'] ?? '').trim(),
-        dueDate: parsed.data['截止日期'] ? String(parsed.data['截止日期']) : ''
+        dueDate: parsed.data['截止日期'] ? String(parsed.data['截止日期']) : '',
+        baseName
       }
     } catch {
       return null

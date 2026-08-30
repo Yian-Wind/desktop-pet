@@ -50,6 +50,26 @@ export function SettingsView() {
     update({ obsidian: { ...config.obsidian, ...patch } })
   }
 
+  function updatePersona(patch: Partial<AppConfig['persona']>) {
+    update({ persona: { ...config.persona, ...patch } })
+  }
+
+  function addBase() {
+    update({ obsidian: { ...config.obsidian, baseFiles: [...config.obsidian.baseFiles, ''] } })
+  }
+
+  function removeBase(index: number) {
+    const list = [...config.obsidian.baseFiles]
+    list.splice(index, 1)
+    update({ obsidian: { ...config.obsidian, baseFiles: list } })
+  }
+
+  function updateBase(index: number, value: string) {
+    const list = [...config.obsidian.baseFiles]
+    list[index] = value
+    update({ obsidian: { ...config.obsidian, baseFiles: list } })
+  }
+
   function updateTriggers(patch: Partial<AppConfig['triggers']>) {
     update({ triggers: { ...config.triggers, ...patch } })
   }
@@ -140,13 +160,34 @@ export function SettingsView() {
       </section>
 
       <section className="settings-section">
+        <h2>人设</h2>
+        <label className="checkbox-row">
+          <input type="checkbox" checked={config.persona.enabled} onChange={(e) => updatePersona({ enabled: e.target.checked })} />
+          启用自定义人设（优先于角色包内置人设）
+        </label>
+        <label>角色名
+          <input value={config.persona.name} onChange={(e) => updatePersona({ name: e.target.value })} placeholder="例如：玛拉妮" />
+        </label>
+        <label>系统提示（人设）
+          <textarea rows={5} value={config.persona.systemPrompt} onChange={(e) => updatePersona({ systemPrompt: e.target.value })} placeholder="描述角色的身份、性格、说话方式、回复风格…" />
+        </label>
+      </section>
+
+      <section className="settings-section">
         <h2>Obsidian</h2>
         <label>Vault 路径
           <input value={config.obsidian.vaultPath} onChange={(e) => updateObsidian({ vaultPath: e.target.value })} placeholder="D:/.../Vault" />
         </label>
-        <label>.base 文件路径
-          <input value={config.obsidian.baseFile} onChange={(e) => updateObsidian({ baseFile: e.target.value })} placeholder="D:/.../视图.base" />
-        </label>
+        <div className="phrase-group">
+          <label className="phrase-label">Base 文件（可多条）</label>
+          {config.obsidian.baseFiles.map((path, index) => (
+            <div className="phrase-row" key={index}>
+              <input value={path} onChange={(e) => updateBase(index, e.target.value)} placeholder="D:/.../视图.base" />
+              <button className="icon-button" onClick={() => removeBase(index)} title="删除">×</button>
+            </div>
+          ))}
+          <button className="secondary-button phrase-add" onClick={addBase}>+ 添加 Base</button>
+        </div>
       </section>
 
       <section className="settings-section">

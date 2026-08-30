@@ -6,7 +6,12 @@ import type { AppConfig, ApiConfig, TriggerConfig } from '../shared/types'
 
 const DEFAULT_CONFIG: AppConfig = {
   api: { baseUrl: '', apiKey: '', model: '' },
-  obsidian: { vaultPath: '', baseFile: '' },
+  obsidian: { vaultPath: '', baseFiles: [] },
+  persona: {
+    enabled: false,
+    name: '',
+    systemPrompt: ''
+  },
   currentPackId: 'fairy',
   petPosition: { x: 100, y: 100, scale: 1.0 },
   triggers: {
@@ -48,12 +53,19 @@ export class ConfigStore {
     }
   }
 
-  private merge(raw: Partial<AppConfig>): AppConfig {
+  private merge(raw: Partial<AppConfig> & { obsidian?: Partial<AppConfig['obsidian']> & { baseFile?: string } }): AppConfig {
+    const oldObsidian = raw.obsidian as unknown as { vaultPath?: string; baseFiles?: string[]; baseFile?: string }
+    const baseFiles = oldObsidian?.baseFiles && oldObsidian.baseFiles.length > 0
+      ? oldObsidian.baseFiles
+      : oldObsidian?.baseFile
+        ? [oldObsidian.baseFile]
+        : []
     return {
       ...DEFAULT_CONFIG,
       ...raw,
       api: { ...DEFAULT_CONFIG.api, ...raw.api },
-      obsidian: { ...DEFAULT_CONFIG.obsidian, ...raw.obsidian },
+      obsidian: { vaultPath: oldObsidian?.vaultPath ?? DEFAULT_CONFIG.obsidian.vaultPath, baseFiles },
+      persona: { ...DEFAULT_CONFIG.persona, ...(raw as Partial<AppConfig>).persona },
       petPosition: { ...DEFAULT_CONFIG.petPosition, ...raw.petPosition },
       triggers: this.mergeTriggers(raw.triggers ?? DEFAULT_CONFIG.triggers),
       reminders: { ...DEFAULT_CONFIG.reminders, ...raw.reminders }

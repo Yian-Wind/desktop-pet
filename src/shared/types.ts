@@ -36,7 +36,13 @@ export interface ApiConfig {
 
 export interface ObsidianConfig {
   vaultPath: string
-  baseFile: string
+  baseFiles: string[]
+}
+
+export interface PersonaPromptConfig {
+  enabled: boolean
+  name: string
+  systemPrompt: string
 }
 
 export interface TriggerConfig {
@@ -60,6 +66,7 @@ export interface PetWindowState {
 export interface AppConfig {
   api: ApiConfig
   obsidian: ObsidianConfig
+  persona: PersonaPromptConfig
   currentPackId: string
   petPosition: { x: number; y: number; scale: number }
   triggers: TriggerConfig
@@ -86,6 +93,7 @@ export interface TodoItem {
   completed: boolean
   priority: string
   dueDate: string
+  baseName?: string
 }
 
 export interface PetEvent {

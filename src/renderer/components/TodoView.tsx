@@ -56,6 +56,9 @@ export function TodoView() {
             </button>
             <div className="todo-card__body">
               <div className="todo-card__title">{todo.title}</div>
+              <div className="todo-card__meta">
+                {todo.baseName ? <span className="todo-card__base">{todo.baseName}</span> : null}
+              </div>
               {todo.dueDate || todo.priority ? (
                 <div className="todo-card__meta">
                   {todo.priority ? <span>{todo.priority}</span> : null}

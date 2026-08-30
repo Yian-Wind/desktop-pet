@@ -70,10 +70,13 @@ export function registerIpcHandlers(
     const cfg = config.get()
     const pack = packs.get(cfg.currentPackId)
     const persona = pack?.manifest.persona
+    const systemPrompt = cfg.persona.enabled && cfg.persona.systemPrompt.trim()
+      ? cfg.persona.systemPrompt
+      : persona?.systemPrompt
     const userMessage: ChatMessage = { role: 'user', content: text, timestamp: Date.now() }
     const messages: ChatMessage[] = [...chatHistory.slice(-20), userMessage]
-    if (persona?.systemPrompt) {
-      messages.unshift({ role: 'system', content: persona.systemPrompt, timestamp: Date.now() })
+    if (systemPrompt) {
+      messages.unshift({ role: 'system', content: systemPrompt, timestamp: Date.now() })
     }
     const result = await skills.execute('chat', { messages }, {
       config: cfg,
@@ -95,7 +98,7 @@ export function registerIpcHandlers(
     const cfg = config.get()
     const pack = packs.get(cfg.currentPackId)
     const persona = pack?.manifest.persona
-    const system = persona?.systemPrompt ?? '你是一个桌面宠物助手。'
+    const system = (cfg.persona.enabled && cfg.persona.systemPrompt.trim() ? cfg.persona.systemPrompt : persona?.systemPrompt) ?? '你是一个桌面宠物助手。'
     const messages: ChatMessage[] = [
       { role: 'system', content: system, timestamp: Date.now() },
       { role: 'user', content: '请用你的角色身份做一次自我介绍，并说明你此刻的状态。', timestamp: Date.now() }
@@ -115,14 +118,14 @@ export function registerIpcHandlers(
 
   ipcMain.handle(IPC.OBSIDIAN_GET_TODOS, async () => {
     const cfg = config.get()
-    if (!cfg.obsidian.baseFile) return []
-    return obsidian.getTodos(cfg.obsidian.vaultPath, cfg.obsidian.baseFile)
+    if (cfg.obsidian.baseFiles.length === 0) return []
+    return obsidian.getTodos(cfg.obsidian.vaultPath, cfg.obsidian.baseFiles)
   })
 
   ipcMain.handle(IPC.OBSIDIAN_ADD_TODO, async (_event, title: string, content: string) => {
     const cfg = config.get()
-    if (!cfg.obsidian.baseFile) throw new Error('请先选择 .base 文件')
-    return obsidian.addTodo(cfg.obsidian.vaultPath, cfg.obsidian.baseFile, title, content)
+    if (cfg.obsidian.baseFiles.length === 0) throw new Error('请先添加 .base 文件')
+    return obsidian.addTodo(cfg.obsidian.vaultPath, cfg.obsidian.baseFiles[0], title, content)
   })
 
   ipcMain.handle(IPC.OBSIDIAN_COMPLETE_TODO, async (_event, filePath: string, completed: boolean) => {
