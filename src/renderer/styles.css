@@ -86,35 +86,6 @@ body.pet-mode, .pet-root {
   to { transform: translateX(-50%) scale(1); opacity: 1; }
 }
 
-.pet-context {
-  position: fixed;
-  z-index: 50;
-  min-width: 150px;
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: 0 10px 26px rgba(31, 36, 48, 0.18);
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.pet-context button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font-size: 13px;
-  border-radius: 7px;
-  cursor: pointer;
-}
-
-.pet-context button:hover { background: var(--accent-soft); }
-
 .pet-live2d {
   width: 120px;
   height: 160px;

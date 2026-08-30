@@ -12,6 +12,7 @@ const api: PetApi = {
   sendPetEvent: (event: PetEvent): Promise<void> => ipcRenderer.invoke(IPC.PET_EVENT, event),
   movePet: (x: number, y: number): void => ipcRenderer.invoke(IPC.PET_MOVE, x, y),
   setPetSize: (scale: number): void => ipcRenderer.invoke(IPC.PET_SET_SIZE, scale),
+  showContextMenu: (): void => ipcRenderer.invoke(IPC.PET_CONTEXT_MENU),
   onPetState: (callback: (state: PetWindowState) => void): () => void => {
     const listener = (_event: unknown, state: PetWindowState) => callback(state)
     ipcRenderer.on('pet:state', listener)

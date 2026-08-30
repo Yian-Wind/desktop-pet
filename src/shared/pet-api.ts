@@ -9,6 +9,7 @@ export interface PetApi {
   sendPetEvent: (event: PetEvent) => Promise<void>
   movePet: (x: number, y: number) => void
   setPetSize: (scale: number) => void
+  showContextMenu: () => void
   onPetState: (callback: (state: PetWindowState) => void) => () => void
   sendChat: (text: string) => Promise<ChatMessage | { error: string }>
   testChat: () => Promise<{ ok: boolean; reply?: string; error?: string }>

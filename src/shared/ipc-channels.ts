@@ -7,6 +7,7 @@ export const IPC = {
   PET_EVENT: 'pet:event',
   PET_MOVE: 'pet:move',
   PET_SET_SIZE: 'pet:set-size',
+  PET_CONTEXT_MENU: 'pet:context-menu',
   CHAT_SEND: 'chat:send',
   CHAT_TEST: 'chat:test',
   CHAT_GET_HISTORY: 'chat:get-history',

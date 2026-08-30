@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain, BrowserWindow } from 'electron'
+import { app, dialog, ipcMain, BrowserWindow, Menu } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 import type { AppConfig, ChatMessage, PetEvent } from '../shared/types'
 import { ConfigStore } from './config'
@@ -62,6 +62,31 @@ export function registerIpcHandlers(
     setPetScale(scale)
     const cfg = config.get()
     config.save({ ...cfg, petPosition: { ...cfg.petPosition, scale } })
+  })
+
+  ipcMain.handle(IPC.PET_CONTEXT_MENU, (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return
+    const cfg = config.get()
+    const packList = packs.list()
+    const template = [
+      { label: '打开面板', click: () => openPanel() },
+      { label: '设置', click: () => openPanel() },
+      { type: 'separator' as const },
+      ...packList.map((pack) => ({
+        label: pack.manifest.name,
+        type: 'radio' as const,
+        checked: pack.manifest.id === cfg.currentPackId,
+        click: () => {
+          const nextCfg = config.get()
+          config.save({ ...nextCfg, currentPackId: pack.manifest.id })
+          behavior.start(pack)
+        }
+      })),
+      { type: 'separator' as const },
+      { label: '退出', click: () => app.quit() }
+    ]
+    Menu.buildFromTemplate(template).popup({ window: win })
   })
 
   ipcMain.handle(IPC.CHAT_GET_HISTORY, () => chatHistory)
