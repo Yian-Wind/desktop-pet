@@ -95,9 +95,7 @@ export function registerIpcHandlers(
     const cfg = config.get()
     const pack = packs.get(cfg.currentPackId)
     const persona = pack?.manifest.persona
-    const systemPrompt = cfg.persona.enabled && cfg.persona.systemPrompt.trim()
-      ? cfg.persona.systemPrompt
-      : persona?.systemPrompt
+    const systemPrompt = buildPersonaPrompt(cfg.persona.enabled ? cfg.persona : persona)
     const userMessage: ChatMessage = { role: 'user', content: text, timestamp: Date.now() }
     const messages: ChatMessage[] = [...chatHistory.slice(-20), userMessage]
     if (systemPrompt) {
@@ -123,7 +121,7 @@ export function registerIpcHandlers(
     const cfg = config.get()
     const pack = packs.get(cfg.currentPackId)
     const persona = pack?.manifest.persona
-    const system = (cfg.persona.enabled && cfg.persona.systemPrompt.trim() ? cfg.persona.systemPrompt : persona?.systemPrompt) ?? '你是一个桌面宠物助手。'
+    const system = buildPersonaPrompt(cfg.persona.enabled ? cfg.persona : persona) || '你是一个桌面宠物助手。'
     const messages: ChatMessage[] = [
       { role: 'system', content: system, timestamp: Date.now() },
       { role: 'user', content: '请用你的角色身份做一次自我介绍，并说明你此刻的状态。', timestamp: Date.now() }
@@ -167,4 +165,15 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC.WINDOW_QUIT, () => {
     app.quit()
   })
+}
+
+function buildPersonaPrompt(input: { name?: string; description?: string; personality?: string; systemPrompt?: string; traits?: string[] } | undefined): string {
+  if (!input) return ''
+  const parts: string[] = []
+  if (input.name) parts.push(`你叫${input.name}`)
+  if (input.description) parts.push(input.description)
+  if (input.personality) parts.push(`性格：${input.personality}`)
+  if (input.traits?.length) parts.push(`特质：${input.traits.filter(Boolean).join('、')}`)
+  if (input.systemPrompt?.trim()) parts.push(input.systemPrompt.trim())
+  return parts.join('。')
 }

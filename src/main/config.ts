@@ -5,12 +5,15 @@ import { safeStorage } from 'electron'
 import type { AppConfig, ApiConfig, TriggerConfig } from '../shared/types'
 
 const DEFAULT_CONFIG: AppConfig = {
-  api: { baseUrl: '', apiKey: '', model: '' },
+  api: { baseUrl: '', apiKey: '', model: '', proxy: { enabled: false, url: 'http://127.0.0.1:7897' } },
   obsidian: { vaultPath: '', baseFiles: [] },
   persona: {
     enabled: false,
     name: '',
-    systemPrompt: ''
+    description: '',
+    personality: '',
+    systemPrompt: '',
+    traits: []
   },
   currentPackId: 'fairy',
   petPosition: { x: 100, y: 100, scale: 1.0 },
@@ -63,9 +66,9 @@ export class ConfigStore {
     return {
       ...DEFAULT_CONFIG,
       ...raw,
-      api: { ...DEFAULT_CONFIG.api, ...raw.api },
+      api: { ...DEFAULT_CONFIG.api, ...raw.api, proxy: { ...DEFAULT_CONFIG.api.proxy, ...raw.api?.proxy } },
       obsidian: { vaultPath: oldObsidian?.vaultPath ?? DEFAULT_CONFIG.obsidian.vaultPath, baseFiles },
-      persona: { ...DEFAULT_CONFIG.persona, ...(raw as Partial<AppConfig>).persona },
+      persona: { ...DEFAULT_CONFIG.persona, ...(raw as Partial<AppConfig>).persona, traits: [...((raw as Partial<AppConfig>).persona?.traits ?? [])] },
       petPosition: { ...DEFAULT_CONFIG.petPosition, ...raw.petPosition },
       triggers: this.mergeTriggers(raw.triggers ?? DEFAULT_CONFIG.triggers),
       reminders: { ...DEFAULT_CONFIG.reminders, ...raw.reminders }

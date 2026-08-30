@@ -46,12 +46,32 @@ export function SettingsView() {
     update({ api: { ...config.api, ...patch } })
   }
 
+  function updateProxy(patch: Partial<AppConfig['api']['proxy']>) {
+    update({ api: { ...config.api, proxy: { ...config.api.proxy, ...patch } } })
+  }
+
   function updateObsidian(patch: Partial<AppConfig['obsidian']>) {
     update({ obsidian: { ...config.obsidian, ...patch } })
   }
 
   function updatePersona(patch: Partial<AppConfig['persona']>) {
     update({ persona: { ...config.persona, ...patch } })
+  }
+
+  function addTrait() {
+    update({ persona: { ...config.persona, traits: [...config.persona.traits, ''] } })
+  }
+
+  function updateTrait(index: number, value: string) {
+    const list = [...config.persona.traits]
+    list[index] = value
+    update({ persona: { ...config.persona, traits: list } })
+  }
+
+  function removeTrait(index: number) {
+    const list = [...config.persona.traits]
+    list.splice(index, 1)
+    update({ persona: { ...config.persona, traits: list } })
   }
 
   function addBase() {
@@ -151,6 +171,13 @@ export function SettingsView() {
         <label>Model
           <input value={config.api.model} onChange={(e) => updateApi({ model: e.target.value })} placeholder="model-name" />
         </label>
+        <label className="checkbox-row">
+          <input type="checkbox" checked={config.api.proxy.enabled} onChange={(e) => updateProxy({ enabled: e.target.checked })} />
+          通过本地代理访问 API
+        </label>
+        <label>代理地址
+          <input value={config.api.proxy.url} onChange={(e) => updateProxy({ url: e.target.value })} placeholder="http://127.0.0.1:7897" />
+        </label>
         <div className="settings-row">
           <button className="secondary-button" onClick={() => void runTest()} disabled={testing}>
             <FlaskConical size={15} /> {testing ? '测试中…' : '测试扮演'}
@@ -168,8 +195,23 @@ export function SettingsView() {
         <label>角色名
           <input value={config.persona.name} onChange={(e) => updatePersona({ name: e.target.value })} placeholder="例如：玛拉妮" />
         </label>
+        <label>简介
+          <input value={config.persona.description} onChange={(e) => updatePersona({ description: e.target.value })} placeholder="角色一句话简介" />
+        </label>
+        <label>性格
+          <input value={config.persona.personality} onChange={(e) => updatePersona({ personality: e.target.value })} placeholder="外向 / 冷静 / 傲娇…" />
+        </label>
+        <label>特质（可多条）
+          {config.persona.traits.map((trait, i) => (
+            <div className="phrase-row" key={i}>
+              <input value={trait} onChange={(e) => updateTrait(i, e.target.value)} placeholder="一个特质" />
+              <button className="icon-button" onClick={() => removeTrait(i)} title="删除">×</button>
+            </div>
+          ))}
+          <button className="secondary-button phrase-add" onClick={addTrait}>+ 添加特质</button>
+        </label>
         <label>系统提示（人设）
-          <textarea rows={5} value={config.persona.systemPrompt} onChange={(e) => updatePersona({ systemPrompt: e.target.value })} placeholder="描述角色的身份、性格、说话方式、回复风格…" />
+          <textarea rows={10} value={config.persona.systemPrompt} onChange={(e) => updatePersona({ systemPrompt: e.target.value })} placeholder="描述角色的身份、性格、说话方式、回复风格、禁忌…" />
         </label>
       </section>
 

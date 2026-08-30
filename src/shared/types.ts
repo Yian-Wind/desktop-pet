@@ -32,6 +32,12 @@ export interface ApiConfig {
   baseUrl: string
   apiKey: string
   model: string
+  proxy: ProxyConfig
+}
+
+export interface ProxyConfig {
+  enabled: boolean
+  url: string
 }
 
 export interface ObsidianConfig {
@@ -42,7 +48,10 @@ export interface ObsidianConfig {
 export interface PersonaPromptConfig {
   enabled: boolean
   name: string
+  description: string
+  personality: string
   systemPrompt: string
+  traits: string[]
 }
 
 export interface TriggerConfig {

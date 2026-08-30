@@ -1,4 +1,5 @@
 import type { ApiConfig, ChatMessage } from '../../shared/types'
+import { ProxyAgent } from 'undici'
 
 export class LLMClient {
   async chat(messages: ChatMessage[], config: ApiConfig): Promise<string> {
@@ -8,6 +9,9 @@ export class LLMClient {
     const endpoint = this.resolveEndpoint(config.baseUrl)
     let response: Response
     try {
+      const dispatcher = config.proxy?.enabled && config.proxy.url
+        ? new ProxyAgent(config.proxy.url)
+        : undefined
       response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -18,6 +22,7 @@ export class LLMClient {
           model: config.model,
           messages: messages.map((m) => ({ role: m.role, content: m.content }))
         }),
+        dispatcher,
         signal: AbortSignal.timeout(30000)
       })
     } catch (e) {
