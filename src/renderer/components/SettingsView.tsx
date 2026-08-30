@@ -1,26 +1,45 @@
-import { useEffect, useState } from 'react'
-import { Save, FlaskConical } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Check, Loader2, PenLine, FlaskConical } from 'lucide-react'
 import type { AppConfig } from '../../shared/types'
+
+type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 export function SettingsView() {
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [packs, setPacks] = useState<Array<{ manifest: { id: string; name: string; type: string } }>>([])
-  const [saved, setSaved] = useState(false)
+  const [saveState, setSaveState] = useState<SaveState>('idle')
   const [testResult, setTestResult] = useState<string | null>(null)
   const [testing, setTesting] = useState(false)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     void Promise.all([window.petApi.getConfig(), window.petApi.listPacks()]).then(([cfg, packList]) => {
       setConfig(cfg)
       setPacks(packList)
     })
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current) }
   }, [])
 
   if (!config) return <div className="empty-state">加载中...</div>
 
+  function commit(next: AppConfig) {
+    setConfig(next)
+    setSaveState('saving')
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(async () => {
+      try {
+        const saved = await window.petApi.saveConfig(next)
+        setConfig(saved)
+        window.petApi.setPetSize(saved.petPosition.scale)
+        setSaveState('saved')
+      } catch {
+        setSaveState('error')
+      }
+    }, 300)
+  }
+
   function update(patch: Partial<AppConfig>) {
-    setConfig({ ...config, ...patch })
-    setSaved(false)
+    commit({ ...config, ...patch })
   }
 
   function updateApi(patch: Partial<AppConfig['api']>) {
@@ -33,6 +52,10 @@ export function SettingsView() {
 
   function updateTriggers(patch: Partial<AppConfig['triggers']>) {
     update({ triggers: { ...config.triggers, ...patch } })
+  }
+
+  function updateReminders(patch: Partial<AppConfig['reminders']>) {
+    update({ reminders: { ...config.reminders, ...patch } })
   }
 
   function updatePhrase(key: string, index: number, value: string) {
@@ -57,14 +80,13 @@ export function SettingsView() {
     update({ triggers: { ...config.triggers, phrases: next } })
   }
 
-  function updateReminders(patch: Partial<AppConfig['reminders']>) {
-    update({ reminders: { ...config.reminders, ...patch } })
+  function updateScale(scale: number) {
+    update({ petPosition: { ...config.petPosition, scale } })
   }
 
-  async function save() {
-    await window.petApi.saveConfig(config)
-    window.petApi.setPetSize(config.petPosition.scale)
-    setSaved(true)
+  function switchPack(packId: string) {
+    update({ currentPackId: packId })
+    void window.petApi.switchPack(packId)
   }
 
   async function runTest() {
@@ -75,6 +97,13 @@ export function SettingsView() {
     else setTestResult(res.error ?? '测试失败')
     setTesting(false)
   }
+
+  const saveBadge = {
+    saving: <><Loader2 size={13} className="spin" /> 保存中…</>,
+    saved: <><Check size={13} /> 已保存</>,
+    error: <><PenLine size={13} /> 保存失败</>,
+    idle: <>修改自动保存</>
+  }[saveState]
 
   const triggerKeys = ['click', 'drag-end', 'idle', 'sleep', 'wake'] as const
   const triggerLabels: Record<string, string> = {
@@ -87,6 +116,10 @@ export function SettingsView() {
 
   return (
     <div className="settings-layout">
+      <div className={`save-bar save-bar--${saveState}`}>
+        {saveBadge}
+      </div>
+
       <section className="settings-section">
         <h2>API</h2>
         <label>Base URL
@@ -123,7 +156,7 @@ export function SettingsView() {
             <button
               key={pack.manifest.id}
               className={config.currentPackId === pack.manifest.id ? 'pack-button active' : 'pack-button'}
-              onClick={() => { void window.petApi.switchPack(pack.manifest.id); update({ currentPackId: pack.manifest.id }) }}
+              onClick={() => switchPack(pack.manifest.id)}
             >
               {pack.manifest.name} · {pack.manifest.type}
             </button>
@@ -135,7 +168,7 @@ export function SettingsView() {
         <h2>宠物</h2>
         <label>大小比例（当前 {config.petPosition.scale}×）
           <input type="range" min={0.5} max={2} step={0.1} value={config.petPosition.scale}
-            onChange={(e) => update({ petPosition: { ...config.petPosition, scale: Number(e.target.value) } })} />
+            onChange={(e) => updateScale(Number(e.target.value))} onPointerUp={() => commit(config)} />
         </label>
       </section>
 
@@ -205,13 +238,6 @@ export function SettingsView() {
           </select>
         </label>
       </section>
-
-      <div className="settings-actions">
-        <button className="primary-button" onClick={() => void save()}>
-          <Save size={16} /> 保存设置
-        </button>
-        {saved ? <span className="saved-hint">已保存</span> : null}
-      </div>
     </div>
   )
 }
