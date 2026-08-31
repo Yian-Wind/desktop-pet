@@ -188,15 +188,16 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
     const runtime = runtimeRef.current
     if (!runtime || !ready) return
 
+    if (state.action === 'drag') return
     const animationName = ACTION_ANIMATIONS[state.action] ?? IDLE_ANIMATION
     if (!runtime.skeleton.data.findAnimation(animationName)) return
     const loop = LOOP_ACTIONS.has(state.action)
-    if (animationName === runtime.currentAction) {
+    if (runtime.currentAction === state.action) {
       if (!loop) runtime.state.setAnimation(0, animationName, false)
       return
     }
 
-    runtime.currentAction = animationName
+    runtime.currentAction = state.action
     runtime.state.setAnimation(0, animationName, loop)
   }, [state.action, ready])
 
