@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PetEvent, PetPack, PetWindowState } from '../../shared/types'
 
+const DRAG_THRESHOLD_PX = 4
+
 export function usePet() {
   const [pack, setPack] = useState<PetPack | null>(null)
   const [state, setState] = useState<PetWindowState | null>(null)
@@ -64,15 +66,22 @@ export function usePet() {
   }
 
   function onPointerDown(event: React.PointerEvent) {
-    draggingRef.current = true
+    draggingRef.current = false
     movedRef.current = false
     offsetRef.current = { x: event.clientX, y: event.clientY }
-    sendEvent({ type: 'drag-start' })
   }
 
   function onPointerMove(event: React.PointerEvent) {
-    if (!draggingRef.current) return
-    movedRef.current = true
+    const distance = Math.hypot(
+      event.clientX - offsetRef.current.x,
+      event.clientY - offsetRef.current.y
+    )
+    if (!draggingRef.current) {
+      if (distance < DRAG_THRESHOLD_PX) return
+      draggingRef.current = true
+      movedRef.current = true
+      sendEvent({ type: 'drag-start' })
+    }
     pendingMoveRef.current = {
       x: event.screenX - offsetRef.current.x,
       y: event.screenY - offsetRef.current.y

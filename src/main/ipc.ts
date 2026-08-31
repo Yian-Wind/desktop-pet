@@ -110,7 +110,7 @@ export function registerIpcHandlers(
     const bounds = win.getBounds()
     const display = screen.getDisplayMatching(bounds)
     const maxY = display.workArea.y + display.workArea.height - bounds.height
-    const distance = Math.min(80, Math.max(0, maxY - bounds.y))
+    const distance = Math.min(10, Math.max(0, maxY - bounds.y))
     if (distance === 0) {
       const cfg = config.get()
       config.save({ ...cfg, petPosition: { ...cfg.petPosition, x: bounds.x, y: bounds.y } })
