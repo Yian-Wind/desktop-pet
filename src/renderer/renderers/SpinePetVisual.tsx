@@ -24,7 +24,7 @@ const ACTION_ANIMATIONS: Record<string, string> = {
   wake: 'loop笑'
 }
 
-const LOOP_ACTIONS = new Set(['idle', 'drag', 'sleep'])
+const LOOP_ACTIONS = new Set(['drag', 'sleep'])
 const IDLE_ANIMATION = ACTION_ANIMATIONS['idle']
 const FIT_MARGIN = 1.15
 
@@ -114,7 +114,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
               if (entry.animation?.name === IDLE_ANIMATION) {
                 scheduleNextBlink()
               } else {
-                animationState.setAnimation(0, IDLE_ANIMATION, true)
+                animationState.setAnimation(0, IDLE_ANIMATION, false)
               }
             }
           })
