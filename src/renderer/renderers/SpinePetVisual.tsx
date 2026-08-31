@@ -32,6 +32,16 @@ const DROP_FALL_SECONDS = 0.14
 const DROP_SPRING_SECONDS = 0.32
 const DRAG_EYE_ATTACHMENT = 'gt-lt-eyes'
 const DRAG_EYE_SLOT = 'gt-lt-eyes'
+const SURF_EXIT_END_SECONDS = 2.8333
+const SURF_RETURN_START_SECONDS = 3.3333
+const SURF_RETURN_END_SECONDS = 6.129
+const SURF_DISMOUNT_START_SECONDS = 8.0833
+const SURF_DISMOUNT_END_SECONDS = 9.3333
+const SURF_EXIT_TO_ENTER_GAP_SECONDS = 0
+const SURF_ENTER_DELAY_SECONDS =
+  SURF_EXIT_END_SECONDS + SURF_EXIT_TO_ENTER_GAP_SECONDS
+const SURF_RETURN_DURATION_SECONDS =
+  SURF_RETURN_END_SECONDS - SURF_RETURN_START_SECONDS
 const EYE_SLOT_NAMES = [
   '上弯闭目',
   '下睫毛',
@@ -141,6 +151,31 @@ function setDragExpression(skeleton: Skeleton, enabled: boolean): void {
   }
 }
 
+function playSurfSequence(runtime: SpineRuntime): void {
+  const state = runtime.state
+
+  const exitEntry = state.setAnimation(0, '冲浪', false)
+  exitEntry.animationStart = 0
+  exitEntry.animationEnd = SURF_EXIT_END_SECONDS
+  exitEntry.mixDuration = 0
+
+  const returnEntry = state.addAnimation(0, '冲浪', false, SURF_ENTER_DELAY_SECONDS)
+  returnEntry.animationStart = SURF_RETURN_START_SECONDS
+  returnEntry.animationEnd = SURF_RETURN_END_SECONDS
+  returnEntry.mixDuration = 0
+
+  const dismountEntry = state.addAnimation(
+    0,
+    '冲浪',
+    false,
+    SURF_RETURN_DURATION_SECONDS
+  )
+  dismountEntry.animationStart = SURF_DISMOUNT_START_SECONDS
+  dismountEntry.animationEnd = SURF_DISMOUNT_END_SECONDS
+  dismountEntry.reverse = true
+  dismountEntry.mixDuration = 0
+}
+
 export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, onHitTestReady }: SpinePetVisualProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const spineCanvasRef = useRef<SpineCanvas | null>(null)
@@ -185,7 +220,11 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
           animationState.addListener({
             complete: (entry) => {
               const runtime = runtimeRef.current
-              if (runtime && entry.animation?.name !== IDLE_ANIMATION) {
+              if (
+                runtime &&
+                entry.animation?.name !== IDLE_ANIMATION &&
+                !(runtime.currentAction === 'surf' && !entry.reverse)
+              ) {
                 runtime.currentAction = 'idle'
                 animationState.setAnimation(0, IDLE_ANIMATION, false)
               }
@@ -295,6 +334,11 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
       : ACTION_ANIMATIONS[state.action] ?? IDLE_ANIMATION
     if (!runtime.skeleton.data.findAnimation(animationName)) return
     const loop = LOOP_ACTIONS.has(state.action)
+    if (animationName === '冲浪') {
+      runtime.currentAction = 'surf'
+      playSurfSequence(runtime)
+      return
+    }
     if (runtime.currentAction === state.action) {
       if (state.action === 'click' || !loop) runtime.state.setAnimation(0, animationName, false)
       return
