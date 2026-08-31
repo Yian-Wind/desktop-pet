@@ -10,6 +10,7 @@ export const IPC = {
   PET_GET_STATE: 'pet:get-state',
   PET_EVENT: 'pet:event',
   PET_MOVE: 'pet:move',
+  PET_DROP: 'pet:drop',
   PET_SET_CLICK_THROUGH: 'pet:set-click-through',
   PET_SET_SIZE: 'pet:set-size',
   PET_CONTEXT_MENU: 'pet:context-menu',

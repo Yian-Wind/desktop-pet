@@ -89,6 +89,7 @@ export function usePet() {
     if (!draggingRef.current) return
     draggingRef.current = false
     flushPendingMove()
+    void window.petApi.dropPet()
     sendEvent({ type: 'drag-end' })
   }
 

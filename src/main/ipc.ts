@@ -1,4 +1,4 @@
-import { app, ipcMain, BrowserWindow, Menu, shell } from 'electron'
+import { app, ipcMain, BrowserWindow, Menu, screen, shell } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 import type { AppConfig, ChatMessage, CorpusConfig, PersonaConfig, PetEvent, PetPack } from '../shared/types'
 import { ConfigStore } from './config'
@@ -18,6 +18,7 @@ export function registerIpcHandlers(
   behavior: BehaviorEngine
 ): void {
   const chatHistoryByPack = new Map<string, ChatMessage[]>()
+  let petDropTimer: ReturnType<typeof setInterval> | null = null
 
   function getChatHistory(packId: string): ChatMessage[] {
     return chatHistoryByPack.get(packId) ?? []
@@ -31,6 +32,12 @@ export function registerIpcHandlers(
 
   function notifyPackChanged(pack: PetPack): void {
     sendToPanel('pack:changed', pack)
+  }
+
+  function stopPetDrop(): void {
+    if (petDropTimer === null) return
+    clearInterval(petDropTimer)
+    petDropTimer = null
   }
 
   ipcMain.handle(IPC.CONFIG_GET, () => config.get())
@@ -89,11 +96,46 @@ export function registerIpcHandlers(
   })
 
   ipcMain.handle(IPC.PET_MOVE, (_event, x: number, y: number) => {
+    stopPetDrop()
     const win = getPetWindow()
     if (!win || win.isDestroyed()) return
     win.setPosition(Math.round(x), Math.round(y))
-    const cfg = config.get()
-    config.save({ ...cfg, petPosition: { ...cfg.petPosition, x, y } })
+  })
+
+  ipcMain.handle(IPC.PET_DROP, () => {
+    stopPetDrop()
+    const win = getPetWindow()
+    if (!win || win.isDestroyed()) return
+
+    const bounds = win.getBounds()
+    const display = screen.getDisplayMatching(bounds)
+    const maxY = display.workArea.y + display.workArea.height - bounds.height
+    const distance = Math.min(80, Math.max(0, maxY - bounds.y))
+    if (distance === 0) {
+      const cfg = config.get()
+      config.save({ ...cfg, petPosition: { ...cfg.petPosition, x: bounds.x, y: bounds.y } })
+      return
+    }
+
+    const startX = bounds.x
+    const startY = bounds.y
+    const duration = 280
+    const startedAt = Date.now()
+    petDropTimer = setInterval(() => {
+      const currentWindow = getPetWindow()
+      if (!currentWindow || currentWindow.isDestroyed()) {
+        stopPetDrop()
+        return
+      }
+
+      const progress = Math.min(1, (Date.now() - startedAt) / duration)
+      currentWindow.setPosition(startX, Math.round(startY + distance * progress * progress))
+      if (progress < 1) return
+
+      stopPetDrop()
+      const cfg = config.get()
+      config.save({ ...cfg, petPosition: { ...cfg.petPosition, x: startX, y: startY + distance } })
+    }, 16)
   })
 
   ipcMain.handle(IPC.PET_SET_SIZE, (_event, scale: number) => {

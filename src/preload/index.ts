@@ -25,6 +25,7 @@ const api: PetApi = {
   getPetState: (): Promise<PetWindowState> => ipcRenderer.invoke(IPC.PET_GET_STATE),
   sendPetEvent: (event: PetEvent): Promise<void> => ipcRenderer.invoke(IPC.PET_EVENT, event),
   movePet: (x: number, y: number): Promise<void> => ipcRenderer.invoke(IPC.PET_MOVE, x, y),
+  dropPet: (): Promise<void> => ipcRenderer.invoke(IPC.PET_DROP),
   setPetSize: (scale: number): Promise<void> => ipcRenderer.invoke(IPC.PET_SET_SIZE, scale),
   setPetClickThrough: (ignore: boolean): Promise<void> => ipcRenderer.invoke(IPC.PET_SET_CLICK_THROUGH, ignore),
   showContextMenu: (): Promise<void> => ipcRenderer.invoke(IPC.PET_CONTEXT_MENU),

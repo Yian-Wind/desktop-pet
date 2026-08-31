@@ -20,6 +20,7 @@ export interface PetApi {
   getPetState: () => Promise<PetWindowState>
   sendPetEvent: (event: PetEvent) => Promise<void>
   movePet: (x: number, y: number) => Promise<void>
+  dropPet: () => Promise<void>
   setPetSize: (scale: number) => Promise<void>
   setPetClickThrough: (ignore: boolean) => Promise<void>
   showContextMenu: () => Promise<void>
