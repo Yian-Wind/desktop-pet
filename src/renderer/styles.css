@@ -27,6 +27,7 @@ body.pet-mode, .pet-root {
   position: relative;
   display: grid;
   place-items: center;
+  touch-action: none;
 }
 
 .pet-visual {

@@ -1,4 +1,4 @@
-import { app, ipcMain, BrowserWindow, Menu, screen, shell } from 'electron'
+import { app, ipcMain, BrowserWindow, Menu, shell } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 import type { AppConfig, ChatMessage, CorpusConfig, PersonaConfig, PetEvent, PetPack } from '../shared/types'
 import { ConfigStore } from './config'
@@ -108,14 +108,7 @@ export function registerIpcHandlers(
     if (!win || win.isDestroyed()) return
 
     const bounds = win.getBounds()
-    const display = screen.getDisplayMatching(bounds)
-    const maxY = display.workArea.y + display.workArea.height - bounds.height
-    const distance = Math.min(10, Math.max(0, maxY - bounds.y))
-    if (distance === 0) {
-      const cfg = config.get()
-      config.save({ ...cfg, petPosition: { ...cfg.petPosition, x: bounds.x, y: bounds.y } })
-      return
-    }
+    const distance = 10
 
     const startX = bounds.x
     const startY = bounds.y

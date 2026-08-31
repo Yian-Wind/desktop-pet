@@ -11,7 +11,7 @@ export function usePet() {
   const pointerDownRef = useRef(false)
   const draggingRef = useRef(false)
   const movedRef = useRef(false)
-  const offsetRef = useRef({ x: 0, y: 0 })
+  const pointerStartRef = useRef({ screenX: 0, screenY: 0, windowX: 0, windowY: 0 })
   const pendingMoveRef = useRef<{ x: number; y: number } | null>(null)
   const moveFrameRef = useRef<number | null>(null)
 
@@ -70,14 +70,20 @@ export function usePet() {
     pointerDownRef.current = true
     draggingRef.current = false
     movedRef.current = false
-    offsetRef.current = { x: event.clientX, y: event.clientY }
+    pointerStartRef.current = {
+      screenX: event.screenX,
+      screenY: event.screenY,
+      windowX: window.screenX,
+      windowY: window.screenY
+    }
   }
 
   function onPointerMove(event: React.PointerEvent) {
     if (!pointerDownRef.current) return
+    const start = pointerStartRef.current
     const distance = Math.hypot(
-      event.clientX - offsetRef.current.x,
-      event.clientY - offsetRef.current.y
+      event.screenX - start.screenX,
+      event.screenY - start.screenY
     )
     if (!draggingRef.current) {
       if (distance < DRAG_THRESHOLD_PX) return
@@ -86,8 +92,8 @@ export function usePet() {
       sendEvent({ type: 'drag-start' })
     }
     pendingMoveRef.current = {
-      x: event.screenX - offsetRef.current.x,
-      y: event.screenY - offsetRef.current.y
+      x: start.windowX + event.screenX - start.screenX,
+      y: start.windowY + event.screenY - start.screenY
     }
     if (moveFrameRef.current === null) {
       moveFrameRef.current = requestAnimationFrame(() => {

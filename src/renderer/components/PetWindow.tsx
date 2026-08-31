@@ -38,6 +38,7 @@ export function PetWindow() {
   function handlePointerDown(event: React.PointerEvent) {
     if (!isPointOnPet(event)) return
     pointerDownRef.current = true
+    event.currentTarget.setPointerCapture(event.pointerId)
     updateClickThrough(event, true)
     onPointerDown(event)
   }
@@ -52,9 +53,19 @@ export function PetWindow() {
   }
 
   function handlePointerUp(event: React.PointerEvent) {
-    const wasDragging = pointerDownRef.current
+    finishPointerDrag(event)
+  }
+
+  function handlePointerCancel(event: React.PointerEvent) {
+    finishPointerDrag(event)
+  }
+
+  function finishPointerDrag(event: React.PointerEvent) {
+    if (!pointerDownRef.current) return
     pointerDownRef.current = false
-    if (!wasDragging) return
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
     updateClickThrough(event, true)
     onPointerUp(event)
   }
@@ -76,6 +87,7 @@ export function PetWindow() {
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
       onClick={handlePointerClick}
       onContextMenu={onContextMenu}
     >
