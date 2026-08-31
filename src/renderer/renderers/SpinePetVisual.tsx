@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import {
   AnimationState,
@@ -18,13 +18,13 @@ import type { PetHitTest } from './PetVisual'
 const ACTION_ANIMATIONS: Record<string, string> = {
   idle: 'eye',
   click: '抬手示意',
-  drag: 'walk',
+  drag: 'eye',
   'drag-end': '冲浪',
   sleep: 'loop',
   wake: 'loop笑'
 }
 
-const LOOP_ACTIONS = new Set(['drag', 'sleep'])
+const LOOP_ACTIONS = new Set(['sleep'])
 const IDLE_ANIMATION = ACTION_ANIMATIONS['idle']
 const FIT_MARGIN = 1.15
 
@@ -34,6 +34,9 @@ interface SpineRuntime {
   spineCanvas: SpineCanvas
   bounds: { x: number; y: number; width: number; height: number }
   currentAction: string
+  swayTime: number
+  baseRootRotation: number
+  baseSkeletonY: number
 }
 
 interface SpinePetVisualProps {
@@ -59,26 +62,8 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const spineCanvasRef = useRef<SpineCanvas | null>(null)
   const runtimeRef = useRef<SpineRuntime | null>(null)
-  const blinkIntervalRef = useRef(blinkIntervalSeconds)
-  const blinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
-
-  const clearBlinkTimeout = useCallback(() => {
-    if (blinkTimeoutRef.current === null) return
-    clearTimeout(blinkTimeoutRef.current)
-    blinkTimeoutRef.current = null
-  }, [])
-
-  const scheduleNextBlink = useCallback(() => {
-    clearBlinkTimeout()
-    blinkTimeoutRef.current = setTimeout(() => {
-      blinkTimeoutRef.current = null
-      const runtime = runtimeRef.current
-      if (!runtime || runtime.currentAction !== 'idle') return
-      runtime.state.setAnimation(0, IDLE_ANIMATION, false)
-    }, blinkIntervalRef.current * 1000)
-  }, [clearBlinkTimeout])
 
   useEffect(() => {
     const target = canvasRef.current
@@ -103,6 +88,9 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
           const skeletonData = new SkeletonJson(new AtlasAttachmentLoader(atlas)).readSkeletonData(skeletonJson)
           const skeleton = new Skeleton(skeletonData)
           const animationState = new AnimationState(new AnimationStateData(skeletonData))
+          const rootBone = skeleton.getRootBone()
+          const baseRootRotation = rootBone?.rotation ?? 0
+          const baseSkeletonY = skeleton.y
 
           const combinedSkin = createCombinedSkin(skeleton)
           if (combinedSkin) skeleton.setSkin(combinedSkin)
@@ -111,9 +99,9 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
 
           animationState.addListener({
             complete: (entry) => {
-              if (entry.animation?.name === IDLE_ANIMATION) {
-                scheduleNextBlink()
-              } else {
+              const runtime = runtimeRef.current
+              if (runtime && entry.animation?.name !== IDLE_ANIMATION) {
+                runtime.currentAction = 'idle'
                 animationState.setAnimation(0, IDLE_ANIMATION, false)
               }
             }
@@ -124,7 +112,10 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
             state: animationState,
             spineCanvas: canvas,
             bounds: skeleton.getBoundsRect(),
-            currentAction: ''
+            currentAction: '',
+            swayTime: 0,
+            baseRootRotation,
+            baseSkeletonY
           }
 
           if (!disposed) setReady(true)
@@ -132,6 +123,16 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
         update(canvas, delta) {
           const runtime = runtimeRef.current
           if (!runtime) return
+          runtime.swayTime += delta
+          const rootBone = runtime.skeleton.getRootBone()
+          if (runtime.currentAction === 'idle') {
+            const sway = Math.sin(runtime.swayTime * Math.PI)
+            if (rootBone) rootBone.rotation = runtime.baseRootRotation + sway * 0.35
+            runtime.skeleton.y = runtime.baseSkeletonY + Math.sin(runtime.swayTime * Math.PI * 2) * 1.5
+          } else {
+            if (rootBone) rootBone.rotation = runtime.baseRootRotation
+            runtime.skeleton.y = runtime.baseSkeletonY
+          }
           runtime.state.update(delta)
           runtime.state.apply(runtime.skeleton)
           runtime.skeleton.updateWorldTransform(Physics.update)
@@ -177,7 +178,6 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
 
     return () => {
       disposed = true
-      clearBlinkTimeout()
       spineCanvasRef.current?.dispose()
       spineCanvasRef.current = null
       runtimeRef.current = null
@@ -190,8 +190,6 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
 
     const animationName = ACTION_ANIMATIONS[state.action] ?? IDLE_ANIMATION
     if (!runtime.skeleton.data.findAnimation(animationName)) return
-    clearBlinkTimeout()
-
     const loop = LOOP_ACTIONS.has(state.action)
     if (animationName === runtime.currentAction) {
       if (!loop) runtime.state.setAnimation(0, animationName, false)
@@ -200,14 +198,21 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
 
     runtime.currentAction = animationName
     runtime.state.setAnimation(0, animationName, loop)
-  }, [state.action, ready, clearBlinkTimeout])
+  }, [state.action, ready])
 
   useEffect(() => {
-    const runtime = runtimeRef.current
-    if (!runtime || !ready) return
-    blinkIntervalRef.current = blinkIntervalSeconds
-    if (runtime.currentAction === 'idle') scheduleNextBlink()
-  }, [blinkIntervalSeconds, ready, scheduleNextBlink])
+    if (!ready) return
+    let timeout = 0
+    const blink = () => {
+      const runtime = runtimeRef.current
+      if (runtime?.currentAction === 'idle') {
+        runtime.state.setAnimation(0, IDLE_ANIMATION, false)
+      }
+      timeout = window.setTimeout(blink, blinkIntervalSeconds * 1000)
+    }
+    timeout = window.setTimeout(blink, blinkIntervalSeconds * 1000)
+    return () => window.clearTimeout(timeout)
+  }, [ready, blinkIntervalSeconds])
 
   useEffect(() => {
     if (!ready) return
