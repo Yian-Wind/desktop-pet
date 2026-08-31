@@ -8,6 +8,7 @@ export function usePet() {
   const [state, setState] = useState<PetWindowState | null>(null)
   const [blinkIntervalSeconds, setBlinkIntervalSeconds] = useState(4)
   const packListRef = useRef<PetPack[]>([])
+  const pointerDownRef = useRef(false)
   const draggingRef = useRef(false)
   const movedRef = useRef(false)
   const offsetRef = useRef({ x: 0, y: 0 })
@@ -66,12 +67,14 @@ export function usePet() {
   }
 
   function onPointerDown(event: React.PointerEvent) {
+    pointerDownRef.current = true
     draggingRef.current = false
     movedRef.current = false
     offsetRef.current = { x: event.clientX, y: event.clientY }
   }
 
   function onPointerMove(event: React.PointerEvent) {
+    if (!pointerDownRef.current) return
     const distance = Math.hypot(
       event.clientX - offsetRef.current.x,
       event.clientY - offsetRef.current.y
@@ -95,6 +98,7 @@ export function usePet() {
   }
 
   function onPointerUp(_event: React.PointerEvent) {
+    pointerDownRef.current = false
     if (!draggingRef.current) return
     draggingRef.current = false
     flushPendingMove()

@@ -36,8 +36,8 @@ export function PetWindow() {
   }
 
   function handlePointerDown(event: React.PointerEvent) {
-    pointerDownRef.current = true
     if (!isPointOnPet(event)) return
+    pointerDownRef.current = true
     updateClickThrough(event, true)
     onPointerDown(event)
   }
