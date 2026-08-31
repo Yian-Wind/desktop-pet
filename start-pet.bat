@@ -14,6 +14,14 @@ if not exist node_modules (
   )
 )
 
+set "PET_EXE=%~dp0node_modules\electron\dist\electron.exe"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq $env:PET_EXE }) { exit 0 } else { exit 1 }"
+if not errorlevel 1 (
+  echo Desktop Pet is already running.
+  pause
+  exit /b 0
+)
+
 echo Starting Desktop Pet...
 call npm run dev
 
