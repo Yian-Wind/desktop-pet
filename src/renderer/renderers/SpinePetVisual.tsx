@@ -28,6 +28,8 @@ const LOOP_ACTIONS = new Set(['sleep'])
 const IDLE_ANIMATION = ACTION_ANIMATIONS['idle']
 const CLICK_EXCLUDED_ANIMATIONS = new Set(['eye', 'loop', 'loop笑', 'walk'])
 const FIT_MARGIN = 1.15
+const DROP_FALL_SECONDS = 0.14
+const DROP_SPRING_SECONDS = 0.32
 
 interface SpineRuntime {
   skeleton: Skeleton
@@ -36,7 +38,10 @@ interface SpineRuntime {
   bounds: { x: number; y: number; width: number; height: number }
   currentAction: string
   swayTime: number
+  dropSpringTime: number | null
   baseRootRotation: number
+  baseRootScaleX: number
+  baseRootScaleY: number
   baseSkeletonY: number
 }
 
@@ -64,6 +69,42 @@ function pickRandomClickAnimation(skeleton: Skeleton, animations: string[]): str
     return !CLICK_EXCLUDED_ANIMATIONS.has(name) && skeleton.data.findAnimation(name) !== null
   })
   return choices[Math.floor(Math.random() * choices.length)] ?? ACTION_ANIMATIONS['click']
+}
+
+function applyStructuralDropSpring(runtime: SpineRuntime, delta: number): void {
+  const rootBone = runtime.skeleton.getRootBone()
+  if (!rootBone) return
+
+  if (runtime.dropSpringTime === null) {
+    rootBone.scaleX = runtime.baseRootScaleX
+    rootBone.scaleY = runtime.baseRootScaleY
+    return
+  }
+
+  runtime.dropSpringTime += delta
+  const elapsed = runtime.dropSpringTime
+  if (elapsed < DROP_FALL_SECONDS) {
+    const progress = elapsed / DROP_FALL_SECONDS
+    rootBone.scaleX = runtime.baseRootScaleX - runtime.baseRootScaleX * 0.0175 * progress
+    rootBone.scaleY = runtime.baseRootScaleY + runtime.baseRootScaleY * 0.03 * progress
+    return
+  }
+
+  const springProgress = Math.min(
+    1,
+    (elapsed - DROP_FALL_SECONDS) / DROP_SPRING_SECONDS
+  )
+  const spring =
+    Math.exp(-5 * springProgress) *
+    Math.cos(Math.PI * 2 * springProgress)
+  rootBone.scaleX = runtime.baseRootScaleX + runtime.baseRootScaleX * 0.045 * spring
+  rootBone.scaleY = runtime.baseRootScaleY - runtime.baseRootScaleY * 0.06 * spring
+
+  if (springProgress >= 1) {
+    runtime.dropSpringTime = null
+    rootBone.scaleX = runtime.baseRootScaleX
+    rootBone.scaleY = runtime.baseRootScaleY
+  }
 }
 
 export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, onHitTestReady }: SpinePetVisualProps) {
@@ -98,6 +139,8 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
           const animationState = new AnimationState(new AnimationStateData(skeletonData))
           const rootBone = skeleton.getRootBone()
           const baseRootRotation = rootBone?.rotation ?? 0
+          const baseRootScaleX = rootBone?.scaleX ?? 1
+          const baseRootScaleY = rootBone?.scaleY ?? 1
           const baseSkeletonY = skeleton.y
 
           const combinedSkin = createCombinedSkin(skeleton)
@@ -122,7 +165,10 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
             bounds: skeleton.getBoundsRect(),
             currentAction: '',
             swayTime: 0,
+            dropSpringTime: null,
             baseRootRotation,
+            baseRootScaleX,
+            baseRootScaleY,
             baseSkeletonY
           }
 
@@ -143,6 +189,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
           }
           runtime.state.update(delta)
           runtime.state.apply(runtime.skeleton)
+          applyStructuralDropSpring(runtime, delta)
           runtime.skeleton.updateWorldTransform(Physics.update)
         },
         render(canvas) {
@@ -196,7 +243,16 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
     const runtime = runtimeRef.current
     if (!runtime || !ready) return
 
-    if (state.action === 'drag') return
+    if (state.action === 'drag') {
+      if (runtime.currentAction !== 'drag') {
+        runtime.currentAction = 'drag'
+        runtime.dropSpringTime = null
+      }
+      return
+    }
+    if (state.action === 'idle' && runtime.currentAction === 'drag') {
+      runtime.dropSpringTime = 0
+    }
     const animationName = state.action === 'click'
       ? pickRandomClickAnimation(runtime.skeleton, pack.manifest.animations)
       : ACTION_ANIMATIONS[state.action] ?? IDLE_ANIMATION

@@ -22,25 +22,6 @@ export function registerIpcHandlers(
 
   const dropDistance = 10
   const dropFallDuration = 140
-  const dropBounceDuration = 240
-  const dropBounceHeight = 8
-
-  function getDropOffset(elapsed: number): number {
-    if (elapsed <= dropFallDuration) {
-      const progress = elapsed / dropFallDuration
-      return dropDistance * progress * progress
-    }
-
-    const bounceProgress = Math.min(
-      1,
-      (elapsed - dropFallDuration) / dropBounceDuration
-    )
-    const bounce =
-      dropBounceHeight *
-      Math.sin(Math.PI * bounceProgress) *
-      (1 - bounceProgress)
-    return dropDistance - bounce
-  }
 
   function getChatHistory(packId: string): ChatMessage[] {
     return chatHistoryByPack.get(packId) ?? []
@@ -132,7 +113,7 @@ export function registerIpcHandlers(
     const bounds = win.getBounds()
     const startX = bounds.x
     const startY = bounds.y
-    const duration = dropFallDuration + dropBounceDuration
+    const duration = dropFallDuration
     const startedAt = Date.now()
     petDropTimer = setInterval(() => {
       const currentWindow = getPetWindow()
@@ -142,7 +123,8 @@ export function registerIpcHandlers(
       }
 
       const elapsed = Math.min(duration, Date.now() - startedAt)
-      currentWindow.setPosition(startX, Math.round(startY + getDropOffset(elapsed)))
+      const progress = elapsed / duration
+      currentWindow.setPosition(startX, Math.round(startY + dropDistance * progress * progress))
       if (elapsed < duration) return
 
       stopPetDrop()
