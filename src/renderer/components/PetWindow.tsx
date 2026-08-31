@@ -7,6 +7,8 @@ export function PetWindow() {
   const { pack, state, blinkIntervalSeconds, onPointerDown, onPointerMove, onPointerUp, onPointerClick } = usePet()
   const hitTestRef = useRef<PetHitTest | null>(null)
   const clickThroughRef = useRef(false)
+  const pointerDownRef = useRef(false)
+  const lastHitTestAtRef = useRef(0)
 
   const handleHitTestReady = useCallback(() => {
     clickThroughRef.current = true
@@ -22,6 +24,11 @@ export function PetWindow() {
   }
 
   function updateClickThrough(event: React.PointerEvent, forceActive = false): void {
+    if (!forceActive) {
+      const now = performance.now()
+      if (now - lastHitTestAtRef.current < 32) return
+      lastHitTestAtRef.current = now
+    }
     const onPet = forceActive || isPointOnPet(event)
     if (clickThroughRef.current === onPet) return
     clickThroughRef.current = onPet
@@ -29,17 +36,25 @@ export function PetWindow() {
   }
 
   function handlePointerDown(event: React.PointerEvent) {
-    updateClickThrough(event, true)
+    pointerDownRef.current = true
     if (!isPointOnPet(event)) return
+    updateClickThrough(event, true)
     onPointerDown(event)
   }
 
   function handlePointerMove(event: React.PointerEvent) {
+    if (pointerDownRef.current) {
+      onPointerMove(event)
+      return
+    }
     updateClickThrough(event)
     if (!clickThroughRef.current) onPointerMove(event)
   }
 
   function handlePointerUp(event: React.PointerEvent) {
+    const wasDragging = pointerDownRef.current
+    pointerDownRef.current = false
+    if (!wasDragging) return
     updateClickThrough(event, true)
     onPointerUp(event)
   }

@@ -14,8 +14,7 @@ export class BehaviorEngine {
     bubble: '',
     bubbleVisible: false,
     busy: false,
-    packType: 'gif',
-    direction: 'right'
+    packType: 'gif'
   }
 
   private idleMinutes = 0
@@ -37,7 +36,6 @@ export class BehaviorEngine {
     this.state.packId = pack.manifest.id
     this.state.packType = pack.manifest.type
     this.state.action = 'idle'
-    this.state.direction = 'right'
     this.state.bubble = ''
     this.idleMinutes = 0
     this.lastIdleBubbleAt = 0
@@ -60,9 +58,6 @@ export class BehaviorEngine {
   async handle(event: PetEvent): Promise<void> {
     if (event.type !== 'idle' && event.type !== 'sleep') this.idleMinutes = 0
     const phrases = this.corpus.phrases
-    if (event.payload?.direction === 'left' || event.payload?.direction === 'right') {
-      this.state.direction = event.payload.direction
-    }
     switch (event.type) {
       case 'click':
         this.state.action = 'click'
@@ -77,8 +72,6 @@ export class BehaviorEngine {
       case 'drag-end':
         this.state.action = 'idle'
         this.showBubble(pick(phrases['drag-end']) ?? '飞起来啦！')
-        break
-      case 'direction-change':
         break
       case 'sleep':
         this.state.action = 'sleep'

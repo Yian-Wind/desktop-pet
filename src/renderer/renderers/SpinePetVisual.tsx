@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import {
   AnimationState,
@@ -12,7 +12,7 @@ import {
   SpineCanvas
 } from '@esotericsoftware/spine-webgl'
 import type { TextureAtlas } from '@esotericsoftware/spine-webgl'
-import type { PetDirection, PetPack, PetWindowState } from '../../shared/types'
+import type { PetPack, PetWindowState } from '../../shared/types'
 import type { PetHitTest } from './PetVisual'
 
 const ACTION_ANIMATIONS: Record<string, string> = {
@@ -34,7 +34,6 @@ interface SpineRuntime {
   spineCanvas: SpineCanvas
   bounds: { x: number; y: number; width: number; height: number }
   currentAction: string
-  currentDirection: PetDirection
 }
 
 interface SpinePetVisualProps {
@@ -45,12 +44,12 @@ interface SpinePetVisualProps {
   onHitTestReady?: () => void
 }
 
-function createCombinedSkin(skeleton: Skeleton, direction: PetDirection): Skin | null {
+function createCombinedSkin(skeleton: Skeleton): Skin | null {
   const defaultSkin = skeleton.data.findSkin('default')
-  const directionSkin = skeleton.data.findSkin(direction)
+  const directionSkin = skeleton.data.findSkin('right')
   if (!defaultSkin || !directionSkin) return null
 
-  const combinedSkin = new Skin(`pet-${direction}`)
+  const combinedSkin = new Skin('pet-right')
   combinedSkin.addSkin(defaultSkin)
   combinedSkin.addSkin(directionSkin)
   return combinedSkin
@@ -60,13 +59,26 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const spineCanvasRef = useRef<SpineCanvas | null>(null)
   const runtimeRef = useRef<SpineRuntime | null>(null)
-  const directionRef = useRef<PetDirection>(state.direction)
+  const blinkIntervalRef = useRef(blinkIntervalSeconds)
+  const blinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
 
-  useEffect(() => {
-    directionRef.current = state.direction
-  }, [state.direction])
+  const clearBlinkTimeout = useCallback(() => {
+    if (blinkTimeoutRef.current === null) return
+    clearTimeout(blinkTimeoutRef.current)
+    blinkTimeoutRef.current = null
+  }, [])
+
+  const scheduleNextBlink = useCallback(() => {
+    clearBlinkTimeout()
+    blinkTimeoutRef.current = setTimeout(() => {
+      blinkTimeoutRef.current = null
+      const runtime = runtimeRef.current
+      if (!runtime || runtime.currentAction !== 'idle') return
+      runtime.state.setAnimation(0, IDLE_ANIMATION, false)
+    }, blinkIntervalRef.current * 1000)
+  }, [clearBlinkTimeout])
 
   useEffect(() => {
     const target = canvasRef.current
@@ -92,14 +104,16 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
           const skeleton = new Skeleton(skeletonData)
           const animationState = new AnimationState(new AnimationStateData(skeletonData))
 
-          const combinedSkin = createCombinedSkin(skeleton, directionRef.current)
+          const combinedSkin = createCombinedSkin(skeleton)
           if (combinedSkin) skeleton.setSkin(combinedSkin)
           skeleton.setToSetupPose()
           skeleton.updateWorldTransform(Physics.update)
 
           animationState.addListener({
             complete: (entry) => {
-              if (entry.animation?.name !== IDLE_ANIMATION) {
+              if (entry.animation?.name === IDLE_ANIMATION) {
+                scheduleNextBlink()
+              } else {
                 animationState.setAnimation(0, IDLE_ANIMATION, true)
               }
             }
@@ -110,8 +124,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
             state: animationState,
             spineCanvas: canvas,
             bounds: skeleton.getBoundsRect(),
-            currentAction: '',
-            currentDirection: directionRef.current
+            currentAction: ''
           }
 
           if (!disposed) setReady(true)
@@ -164,6 +177,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
 
     return () => {
       disposed = true
+      clearBlinkTimeout()
       spineCanvasRef.current?.dispose()
       spineCanvasRef.current = null
       runtimeRef.current = null
@@ -176,6 +190,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
 
     const animationName = ACTION_ANIMATIONS[state.action] ?? IDLE_ANIMATION
     if (!runtime.skeleton.data.findAnimation(animationName)) return
+    clearBlinkTimeout()
 
     const loop = LOOP_ACTIONS.has(state.action)
     if (animationName === runtime.currentAction) {
@@ -184,31 +199,15 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
     }
 
     runtime.currentAction = animationName
-    const entry = runtime.state.setAnimation(0, animationName, loop)
-    if (animationName === IDLE_ANIMATION && entry.animation) {
-      entry.timeScale = entry.animation.duration / blinkIntervalSeconds
-    }
-  }, [state.action, ready])
+    runtime.state.setAnimation(0, animationName, loop)
+  }, [state.action, ready, clearBlinkTimeout])
 
   useEffect(() => {
     const runtime = runtimeRef.current
     if (!runtime || !ready) return
-    const entry = runtime.state.getCurrent(0)
-    if (entry?.animation?.name !== IDLE_ANIMATION || !entry.animation) return
-    entry.timeScale = entry.animation.duration / blinkIntervalSeconds
-  }, [blinkIntervalSeconds, ready])
-
-  useEffect(() => {
-    const runtime = runtimeRef.current
-    if (!runtime || !ready || runtime.currentDirection === state.direction) return
-
-    const combinedSkin = createCombinedSkin(runtime.skeleton, state.direction)
-    runtime.currentDirection = state.direction
-    if (!combinedSkin) return
-
-    runtime.skeleton.setSkin(combinedSkin)
-    runtime.skeleton.setToSetupPose()
-  }, [state.direction, ready])
+    blinkIntervalRef.current = blinkIntervalSeconds
+    if (runtime.currentAction === 'idle') scheduleNextBlink()
+  }, [blinkIntervalSeconds, ready, scheduleNextBlink])
 
   useEffect(() => {
     if (!ready) return

@@ -1,5 +1,4 @@
 export type PetPackType = 'gif' | 'live2d' | 'spine'
-export type PetDirection = 'left' | 'right'
 
 export type BehaviorMode = 'rules' | 'llm'
 
@@ -65,7 +64,6 @@ export interface PetWindowState {
   bubbleVisible: boolean
   busy: boolean
   packType: PetPackType
-  direction: PetDirection
 }
 
 export interface AppConfig {
@@ -101,7 +99,7 @@ export interface TodoItem {
 }
 
 export interface PetEvent {
-  type: 'click' | 'drag-start' | 'drag-end' | 'direction-change' | 'idle' | 'sleep' | 'wake' | 'chat-open' | 'chat-close'
+  type: 'click' | 'drag-start' | 'drag-end' | 'idle' | 'sleep' | 'wake' | 'chat-open' | 'chat-close'
   payload?: Record<string, unknown>
 }
 

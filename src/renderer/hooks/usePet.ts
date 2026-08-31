@@ -9,8 +9,8 @@ export function usePet() {
   const draggingRef = useRef(false)
   const movedRef = useRef(false)
   const offsetRef = useRef({ x: 0, y: 0 })
-  const lastPointerXRef = useRef(0)
-  const directionRef = useRef<'left' | 'right'>('right')
+  const pendingMoveRef = useRef<{ x: number; y: number } | null>(null)
+  const moveFrameRef = useRef<number | null>(null)
 
   useEffect(() => {
     let disposed = false
@@ -40,6 +40,7 @@ export function usePet() {
     })
     return () => {
       disposed = true
+      flushPendingMove()
       unsubscribe()
       unsubscribeConfig()
     }
@@ -51,32 +52,43 @@ export function usePet() {
     void window.petApi.sendPetEvent(event)
   }
 
+  function flushPendingMove() {
+    if (moveFrameRef.current !== null) {
+      cancelAnimationFrame(moveFrameRef.current)
+      moveFrameRef.current = null
+    }
+    const move = pendingMoveRef.current
+    if (!move) return
+    pendingMoveRef.current = null
+    void window.petApi.movePet(move.x, move.y)
+  }
+
   function onPointerDown(event: React.PointerEvent) {
     draggingRef.current = true
     movedRef.current = false
     offsetRef.current = { x: event.clientX, y: event.clientY }
-    lastPointerXRef.current = event.screenX
     sendEvent({ type: 'drag-start' })
   }
 
   function onPointerMove(event: React.PointerEvent) {
     if (!draggingRef.current) return
     movedRef.current = true
-    const deltaX = event.screenX - lastPointerXRef.current
-    if (Math.abs(deltaX) >= 2) {
-      const direction = deltaX > 0 ? 'right' : 'left'
-      if (direction !== directionRef.current) {
-        directionRef.current = direction
-        sendEvent({ type: 'direction-change', payload: { direction } })
-      }
-      lastPointerXRef.current = event.screenX
+    pendingMoveRef.current = {
+      x: event.screenX - offsetRef.current.x,
+      y: event.screenY - offsetRef.current.y
     }
-    window.petApi.movePet(event.screenX - offsetRef.current.x, event.screenY - offsetRef.current.y)
+    if (moveFrameRef.current === null) {
+      moveFrameRef.current = requestAnimationFrame(() => {
+        moveFrameRef.current = null
+        flushPendingMove()
+      })
+    }
   }
 
   function onPointerUp(_event: React.PointerEvent) {
     if (!draggingRef.current) return
     draggingRef.current = false
+    flushPendingMove()
     sendEvent({ type: 'drag-end' })
   }
 
