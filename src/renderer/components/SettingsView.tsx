@@ -87,6 +87,10 @@ export function SettingsView() {
     update({ reminders: { ...cfg.reminders, ...patch } })
   }
 
+  function updateSpine(patch: Partial<AppConfig['spine']>) {
+    update({ spine: { ...cfg.spine, ...patch } })
+  }
+
   function addBase() {
     update({ obsidian: { ...cfg.obsidian, baseFiles: [...cfg.obsidian.baseFiles, ''] } })
   }
@@ -314,6 +318,16 @@ export function SettingsView() {
         <label>大小比例（当前 {cfg.petPosition.scale}×）
           <input type="range" min={0.5} max={2} step={0.1} value={cfg.petPosition.scale}
             onChange={(e) => updateScale(Number(e.target.value))} onPointerUp={() => commit(cfg)} />
+        </label>
+        <label>眨眼间隔（当前 {cfg.spine.blinkIntervalSeconds} 秒）
+          <input
+            type="range"
+            min={1}
+            max={10}
+            step={0.5}
+            value={cfg.spine.blinkIntervalSeconds}
+            onChange={(e) => updateSpine({ blinkIntervalSeconds: Number(e.target.value) })}
+          />
         </label>
       </section>
 

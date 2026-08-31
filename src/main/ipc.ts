@@ -39,7 +39,14 @@ export function registerIpcHandlers(
     config.save(cfg)
     app.setLoginItemSettings({ openAtLogin: cfg.autostart })
     setPetScale(cfg.petPosition.scale)
-    return config.get()
+    const saved = config.get()
+    sendToPet(IPC.CONFIG_CHANGED, saved)
+    return saved
+  })
+
+  ipcMain.handle(IPC.PET_SET_CLICK_THROUGH, (_event, ignore: boolean) => {
+    getPetWindow()?.setIgnoreMouseEvents(ignore, { forward: true })
+    return true
   })
 
   ipcMain.handle(IPC.PACK_LIST, () => packs.list())

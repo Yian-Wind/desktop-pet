@@ -26,6 +26,7 @@ const api: PetApi = {
   sendPetEvent: (event: PetEvent): Promise<void> => ipcRenderer.invoke(IPC.PET_EVENT, event),
   movePet: (x: number, y: number): Promise<void> => ipcRenderer.invoke(IPC.PET_MOVE, x, y),
   setPetSize: (scale: number): Promise<void> => ipcRenderer.invoke(IPC.PET_SET_SIZE, scale),
+  setPetClickThrough: (ignore: boolean): Promise<void> => ipcRenderer.invoke(IPC.PET_SET_CLICK_THROUGH, ignore),
   showContextMenu: (): Promise<void> => ipcRenderer.invoke(IPC.PET_CONTEXT_MENU),
   onPetState: (callback: (state: PetWindowState) => void): (() => void) => {
     const listener = (_event: unknown, state: PetWindowState) => callback(state)
@@ -36,6 +37,11 @@ const api: PetApi = {
     const listener = (_event: unknown, pack: PetPack) => callback(pack)
     ipcRenderer.on('pack:changed', listener)
     return () => ipcRenderer.removeListener('pack:changed', listener)
+  },
+  onConfigChanged: (callback: (config: AppConfig) => void): (() => void) => {
+    const listener = (_event: unknown, config: AppConfig) => callback(config)
+    ipcRenderer.on(IPC.CONFIG_CHANGED, listener)
+    return () => ipcRenderer.removeListener(IPC.CONFIG_CHANGED, listener)
   },
   sendChat: (text: string): Promise<ChatMessage | { error: string }> => ipcRenderer.invoke(IPC.CHAT_SEND, text),
   testChat: (): Promise<{ ok: boolean; reply?: string; error?: string }> => ipcRenderer.invoke(IPC.CHAT_TEST),

@@ -1,6 +1,7 @@
 export const IPC = {
   CONFIG_GET: 'config:get',
   CONFIG_SAVE: 'config:save',
+  CONFIG_CHANGED: 'config:changed',
   PACK_LIST: 'pack:list',
   PACK_SWITCH: 'pack:switch',
   PACK_SAVE_PERSONA: 'pack:save-persona',
@@ -9,6 +10,7 @@ export const IPC = {
   PET_GET_STATE: 'pet:get-state',
   PET_EVENT: 'pet:event',
   PET_MOVE: 'pet:move',
+  PET_SET_CLICK_THROUGH: 'pet:set-click-through',
   PET_SET_SIZE: 'pet:set-size',
   PET_CONTEXT_MENU: 'pet:context-menu',
   CHAT_SEND: 'chat:send',

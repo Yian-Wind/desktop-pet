@@ -4,6 +4,7 @@ import type { PetEvent, PetPack, PetWindowState } from '../../shared/types'
 export function usePet() {
   const [pack, setPack] = useState<PetPack | null>(null)
   const [state, setState] = useState<PetWindowState | null>(null)
+  const [blinkIntervalSeconds, setBlinkIntervalSeconds] = useState(4)
   const packListRef = useRef<PetPack[]>([])
   const draggingRef = useRef(false)
   const movedRef = useRef(false)
@@ -23,6 +24,7 @@ export function usePet() {
       if (!disposed) {
         setPack(current ?? null)
         setState(petState)
+        setBlinkIntervalSeconds(config.spine.blinkIntervalSeconds)
       }
     }
     void init()
@@ -33,9 +35,13 @@ export function usePet() {
         return packListRef.current.find((p) => p.manifest.id === next.packId) ?? prev
       })
     })
+    const unsubscribeConfig = window.petApi.onConfigChanged((next) => {
+      setBlinkIntervalSeconds(next.spine.blinkIntervalSeconds)
+    })
     return () => {
       disposed = true
       unsubscribe()
+      unsubscribeConfig()
     }
   }, [])
 
@@ -68,15 +74,15 @@ export function usePet() {
     window.petApi.movePet(event.screenX - offsetRef.current.x, event.screenY - offsetRef.current.y)
   }
 
-  function onPointerUp() {
+  function onPointerUp(_event: React.PointerEvent) {
     if (!draggingRef.current) return
     draggingRef.current = false
     sendEvent({ type: 'drag-end' })
   }
 
-  function onPointerClick() {
+  function onPointerClick(_event: React.MouseEvent) {
     if (!movedRef.current) sendEvent({ type: 'click' })
   }
 
-  return { pack, state, adapterLabel, onPointerDown, onPointerMove, onPointerUp, onPointerClick }
+  return { pack, state, adapterLabel, blinkIntervalSeconds, onPointerDown, onPointerMove, onPointerUp, onPointerClick }
 }

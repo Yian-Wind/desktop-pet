@@ -73,6 +73,7 @@ export interface AppConfig {
   obsidian: ObsidianConfig
   currentPackId: string
   petPosition: { x: number; y: number; scale: number }
+  spine: { blinkIntervalSeconds: number }
   reminders: {
     enabled: boolean
     minIntervalMinutes: number

@@ -69,6 +69,7 @@ body.pet-mode, .pet-root {
   line-height: 1.4;
   box-shadow: 0 6px 18px rgba(31, 36, 48, 0.16);
   animation: pop 0.2s ease;
+  pointer-events: none;
 }
 
 .pet-bubble::after {

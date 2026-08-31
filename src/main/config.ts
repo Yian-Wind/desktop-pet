@@ -8,6 +8,7 @@ const DEFAULT_CONFIG: AppConfig = {
   obsidian: { vaultPath: '', baseFiles: [] },
   currentPackId: 'fairy',
   petPosition: { x: 100, y: 100, scale: 1.0 },
+  spine: { blinkIntervalSeconds: 4 },
   reminders: { enabled: true, minIntervalMinutes: 30, startHour: 9, endHour: 22 },
   autostart: false,
   behaviorMode: 'rules'
@@ -47,6 +48,11 @@ export class ConfigStore {
       api: { ...DEFAULT_CONFIG.api, ...raw.api, proxy: { ...DEFAULT_CONFIG.api.proxy, ...raw.api?.proxy } },
       obsidian: { vaultPath: oldObsidian?.vaultPath ?? DEFAULT_CONFIG.obsidian.vaultPath, baseFiles },
       petPosition: { ...DEFAULT_CONFIG.petPosition, ...raw.petPosition },
+      spine: {
+        blinkIntervalSeconds: Number.isFinite(raw.spine?.blinkIntervalSeconds)
+          ? Math.min(10, Math.max(1, Number(raw.spine?.blinkIntervalSeconds)))
+          : DEFAULT_CONFIG.spine.blinkIntervalSeconds
+      },
       reminders: { ...DEFAULT_CONFIG.reminders, ...raw.reminders }
     }
   }
