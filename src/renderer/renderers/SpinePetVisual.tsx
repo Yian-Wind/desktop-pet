@@ -30,6 +30,17 @@ const CLICK_EXCLUDED_ANIMATIONS = new Set(['eye', 'loop', 'loop笑', 'walk'])
 const FIT_MARGIN = 1.15
 const DROP_FALL_SECONDS = 0.14
 const DROP_SPRING_SECONDS = 0.32
+const DRAG_EYE_ATTACHMENT = 'gt-lt-eyes'
+const DRAG_EYE_SLOT = 'gt-lt-eyes'
+const EYE_SLOT_NAMES = [
+  '上弯闭目',
+  '下睫毛',
+  '双眼皮',
+  '眼白',
+  '睫毛',
+  '瞳孔',
+  '高光'
+]
 
 interface SpineRuntime {
   skeleton: Skeleton
@@ -104,6 +115,29 @@ function applyStructuralDropSpring(runtime: SpineRuntime, delta: number): void {
     runtime.dropSpringTime = null
     rootBone.scaleX = runtime.baseRootScaleX
     rootBone.scaleY = runtime.baseRootScaleY
+    setDragExpression(runtime.skeleton, false)
+  }
+}
+
+function setDragExpression(skeleton: Skeleton, enabled: boolean): void {
+  const dragEyeSlot = skeleton.findSlot(DRAG_EYE_SLOT)
+  if (!dragEyeSlot) return
+
+  if (enabled) {
+    dragEyeSlot.setAttachment(skeleton.getAttachment(dragEyeSlot.data.index, DRAG_EYE_ATTACHMENT))
+    dragEyeSlot.color.set(1, 1, 1, 1)
+    for (const slotName of EYE_SLOT_NAMES) {
+      if (slotName === DRAG_EYE_SLOT) continue
+      const slot = skeleton.findSlot(slotName)
+      if (slot) slot.color.set(1, 1, 1, 0)
+    }
+    return
+  }
+
+  dragEyeSlot.color.set(1, 1, 1, 0)
+  for (const slotName of EYE_SLOT_NAMES) {
+    const slot = skeleton.findSlot(slotName)
+    slot?.setToSetupPose()
   }
 }
 
@@ -189,6 +223,9 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
           }
           runtime.state.update(delta)
           runtime.state.apply(runtime.skeleton)
+          if (runtime.currentAction === 'drag' || runtime.dropSpringTime !== null) {
+            setDragExpression(runtime.skeleton, true)
+          }
           applyStructuralDropSpring(runtime, delta)
           runtime.skeleton.updateWorldTransform(Physics.update)
         },

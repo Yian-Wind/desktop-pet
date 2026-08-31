@@ -169,3 +169,10 @@ bounds:1040,128,108,302
 rotate:90
 鲨鱼
 bounds:756,356,572,251
+
+mualani-eye-gt-lt-bold.png
+size:167,63
+filter:Linear,Linear
+scale:1
+gt-lt-eyes
+bounds:0,0,167,63
