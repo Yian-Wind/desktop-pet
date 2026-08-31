@@ -45,7 +45,7 @@ if (!gotLock) {
     createPanelWindow()
     createTray(() => app.quit())
 
-    const currentPack = packs.get('mualani') ?? packs.list()[0]
+    const currentPack = startupPack
     if (currentPack) behavior.start(currentPack)
   })
 

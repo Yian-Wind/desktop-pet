@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { usePet } from '../hooks/usePet'
 import { PetVisual } from '../renderers/PetVisual'
 import type { PetHitTest } from '../renderers/PetVisual'
@@ -14,6 +14,14 @@ export function PetWindow() {
     clickThroughRef.current = true
     void window.petApi.setPetClickThrough(true)
   }, [])
+
+  useEffect(() => {
+    if (pack?.manifest.type === 'spine') return
+    hitTestRef.current = null
+    if (!clickThroughRef.current) return
+    clickThroughRef.current = false
+    void window.petApi.setPetClickThrough(false)
+  }, [pack?.manifest.id, pack?.manifest.type])
 
   if (!pack || !state) {
     return <div className="pet-loading">loading</div>

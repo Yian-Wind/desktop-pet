@@ -16,7 +16,7 @@ function loadRenderer(win: BrowserWindow, windowName: string): void {
 export function createPetWindow(position: { x: number; y: number; scale: number }): BrowserWindow {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
   const size = 320 * (position.scale || 1)
-  petWindow = new BrowserWindow({
+  const win = new BrowserWindow({
     width: size,
     height: size,
     x: position.x || width - size - 40,
@@ -33,13 +33,17 @@ export function createPetWindow(position: { x: number; y: number; scale: number 
       nodeIntegration: false
     }
   })
-  petWindow.setAlwaysOnTop(true, 'screen-saver')
-  loadRenderer(petWindow, 'pet')
-  return petWindow
+  win.setAlwaysOnTop(true, 'screen-saver')
+  win.on('closed', () => {
+    if (petWindow === win) petWindow = null
+  })
+  petWindow = win
+  loadRenderer(win, 'pet')
+  return win
 }
 
 export function createPanelWindow(): BrowserWindow {
-  panelWindow = new BrowserWindow({
+  const win = new BrowserWindow({
     width: 860,
     height: 640,
     show: false,
@@ -50,8 +54,12 @@ export function createPanelWindow(): BrowserWindow {
       nodeIntegration: false
     }
   })
-  loadRenderer(panelWindow, 'panel')
-  return panelWindow
+  win.on('closed', () => {
+    if (panelWindow === win) panelWindow = null
+  })
+  panelWindow = win
+  loadRenderer(win, 'panel')
+  return win
 }
 
 export function getPetWindow(): BrowserWindow | null {
@@ -69,10 +77,12 @@ export function openPanel(): void {
 }
 
 export function sendToPet(channel: string, payload: unknown): void {
+  if (!petWindow || petWindow.isDestroyed() || petWindow.webContents.isDestroyed()) return
   petWindow?.webContents.send(channel, payload)
 }
 
 export function sendToPanel(channel: string, payload: unknown): void {
+  if (!panelWindow || panelWindow.isDestroyed() || panelWindow.webContents.isDestroyed()) return
   panelWindow?.webContents.send(channel, payload)
 }
 

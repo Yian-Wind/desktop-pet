@@ -52,27 +52,35 @@ export function SettingsView() {
   const currentPack = packs.find((p) => p.manifest.id === cfg.currentPackId) ?? packs[0]
   const currentScale = cfg.petScales[cfg.currentPackId] ?? currentPack?.manifest.defaultScale ?? 1
 
-  function commit(next: AppConfig) {
+  async function persist(next: AppConfig) {
+    try {
+      const saved = await window.petApi.saveConfig(next)
+      setConfig(saved)
+      setSaveState('saved')
+    } catch {
+      setSaveState('error')
+    }
+  }
+
+  function commit(next: AppConfig, delayMs = 300) {
     setConfig(next)
     setSaveState('saving')
     if (saveTimer.current) clearTimeout(saveTimer.current)
+    if (delayMs === 0) {
+      void persist(next)
+      return
+    }
     saveTimer.current = setTimeout(async () => {
-      try {
-        const saved = await window.petApi.saveConfig(next)
-        setConfig(saved)
-        setSaveState('saved')
-      } catch {
-        setSaveState('error')
-      }
-    }, 300)
+      void persist(next)
+    }, delayMs)
   }
 
   function update(patch: Partial<AppConfig>) {
     commit({ ...cfg, ...patch })
   }
 
-  function updateApi(patch: Partial<AppConfig['api']>) {
-    update({ api: { ...cfg.api, ...patch } })
+  function updateApi(patch: Partial<AppConfig['api']>, immediate = false) {
+    commit({ ...cfg, api: { ...cfg.api, ...patch } }, immediate ? 0 : 300)
   }
 
   function updateProxy(patch: Partial<AppConfig['api']['proxy']>) {
@@ -108,7 +116,10 @@ export function SettingsView() {
   }
 
   function updateScale(scale: number) {
-    update({ petScales: { ...cfg.petScales, [cfg.currentPackId]: scale } })
+    commit(
+      { ...cfg, petScales: { ...cfg.petScales, [cfg.currentPackId]: scale } },
+      0
+    )
   }
 
   async function switchPack(packId: string) {
@@ -276,7 +287,7 @@ export function SettingsView() {
           <input value={cfg.api.baseUrl} onChange={(e) => updateApi({ baseUrl: e.target.value })} placeholder="https://api.example.com/v1" />
         </label>
         <label>API Key
-          <input type="password" value={cfg.api.apiKey} onChange={(e) => updateApi({ apiKey: e.target.value })} placeholder="sk-..." />
+          <input type="password" value={cfg.api.apiKey} onChange={(e) => updateApi({ apiKey: e.target.value }, true)} placeholder="sk-..." />
         </label>
         <label>Model
           <input value={cfg.api.model} onChange={(e) => updateApi({ model: e.target.value })} placeholder="model-name" />

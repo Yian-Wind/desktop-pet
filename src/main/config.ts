@@ -1,5 +1,5 @@
 import { app, safeStorage } from 'electron'
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, renameSync, copyFileSync, unlinkSync, existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { AppConfig, ApiConfig } from '../shared/types'
 
@@ -27,11 +27,20 @@ export class ConfigStore {
   }
 
   private load(): AppConfig {
-    if (!existsSync(this.filePath)) return { ...DEFAULT_CONFIG, api: { ...DEFAULT_CONFIG.api } }
+    if (!existsSync(this.filePath) && !existsSync(`${this.filePath}.bak`)) {
+      return { ...DEFAULT_CONFIG, api: { ...DEFAULT_CONFIG.api } }
+    }
     try {
       const raw = JSON.parse(readFileSync(this.filePath, 'utf-8'))
       return this.merge(raw)
     } catch {
+      if (existsSync(`${this.filePath}.bak`)) {
+        try {
+          const raw = JSON.parse(readFileSync(`${this.filePath}.bak`, 'utf-8'))
+          return this.merge(raw)
+        } catch { /* ignore */
+        }
+      }
       return { ...DEFAULT_CONFIG, api: { ...DEFAULT_CONFIG.api } }
     }
   }
@@ -79,11 +88,35 @@ export class ConfigStore {
     return { ...this.config, api }
   }
 
+  private writeAtomic(filePath: string, data: string | Uint8Array): void {
+    const tempPath = `${filePath}.tmp`
+    const backupPath = `${filePath}.bak`
+    writeFileSync(tempPath, data, 'utf-8')
+    let usedFallback = false
+    try {
+      renameSync(tempPath, filePath)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error
+      usedFallback = true
+      const destinationExisted = existsSync(filePath)
+      if (destinationExisted) copyFileSync(filePath, backupPath)
+      try {
+        copyFileSync(tempPath, filePath)
+      } catch (copyError) {
+        if (destinationExisted) copyFileSync(backupPath, filePath)
+        throw copyError
+      }
+    } finally {
+      if (existsSync(tempPath)) unlinkSync(tempPath)
+      if (usedFallback && existsSync(backupPath)) unlinkSync(backupPath)
+    }
+  }
+
   save(cfg: AppConfig): void {
     this.config = this.merge(cfg)
     this.setApiConfig(cfg.api)
     const toSave = { ...this.config, api: { ...this.config.api, apiKey: '' } }
-    writeFileSync(this.filePath, JSON.stringify(toSave, null, 2), 'utf-8')
+    this.writeAtomic(this.filePath, JSON.stringify(toSave, null, 2))
   }
 
   private getApiConfig(): ApiConfig {
@@ -91,12 +124,14 @@ export class ConfigStore {
     if (stored.apiKey && stored.apiKey !== '') return stored
     if (safeStorage.isEncryptionAvailable()) {
       const keyPath = this.filePath.replace('.json', '.key.enc')
-      if (existsSync(keyPath)) {
+      const backupPath = `${keyPath}.bak`
+      for (const path of [keyPath, backupPath]) {
+        if (!existsSync(path)) continue
         try {
-          const encrypted = readFileSync(keyPath)
+          const encrypted = readFileSync(path)
           const apiKey = safeStorage.decryptString(encrypted)
-          return { ...stored, apiKey }
-        } catch { /* ignore */ }
+          if (apiKey) return { ...stored, apiKey }
+        } catch { /* try the next key file */ }
       }
     }
     return stored
@@ -107,7 +142,7 @@ export class ConfigStore {
     if (safeStorage.isEncryptionAvailable() && api.apiKey) {
       const keyPath = this.filePath.replace('.json', '.key.enc')
       try {
-        writeFileSync(keyPath, safeStorage.encryptString(api.apiKey))
+        this.writeAtomic(keyPath, safeStorage.encryptString(api.apiKey))
       } catch { /* ignore */ }
     }
   }
