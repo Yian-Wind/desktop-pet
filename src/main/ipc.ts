@@ -20,6 +20,28 @@ export function registerIpcHandlers(
   const chatHistoryByPack = new Map<string, ChatMessage[]>()
   let petDropTimer: ReturnType<typeof setInterval> | null = null
 
+  const dropDistance = 10
+  const dropFallDuration = 140
+  const dropBounceDuration = 240
+  const dropBounceHeight = 8
+
+  function getDropOffset(elapsed: number): number {
+    if (elapsed <= dropFallDuration) {
+      const progress = elapsed / dropFallDuration
+      return dropDistance * progress * progress
+    }
+
+    const bounceProgress = Math.min(
+      1,
+      (elapsed - dropFallDuration) / dropBounceDuration
+    )
+    const bounce =
+      dropBounceHeight *
+      Math.sin(Math.PI * bounceProgress) *
+      (1 - bounceProgress)
+    return dropDistance - bounce
+  }
+
   function getChatHistory(packId: string): ChatMessage[] {
     return chatHistoryByPack.get(packId) ?? []
   }
@@ -108,11 +130,9 @@ export function registerIpcHandlers(
     if (!win || win.isDestroyed()) return
 
     const bounds = win.getBounds()
-    const distance = 10
-
     const startX = bounds.x
     const startY = bounds.y
-    const duration = 140
+    const duration = dropFallDuration + dropBounceDuration
     const startedAt = Date.now()
     petDropTimer = setInterval(() => {
       const currentWindow = getPetWindow()
@@ -121,13 +141,13 @@ export function registerIpcHandlers(
         return
       }
 
-      const progress = Math.min(1, (Date.now() - startedAt) / duration)
-      currentWindow.setPosition(startX, Math.round(startY + distance * progress * progress))
-      if (progress < 1) return
+      const elapsed = Math.min(duration, Date.now() - startedAt)
+      currentWindow.setPosition(startX, Math.round(startY + getDropOffset(elapsed)))
+      if (elapsed < duration) return
 
       stopPetDrop()
       const cfg = config.get()
-      config.save({ ...cfg, petPosition: { ...cfg.petPosition, x: startX, y: startY + distance } })
+      config.save({ ...cfg, petPosition: { ...cfg.petPosition, x: startX, y: startY + dropDistance } })
     }, 16)
   })
 
