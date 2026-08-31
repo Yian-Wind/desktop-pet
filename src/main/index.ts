@@ -36,7 +36,12 @@ if (!gotLock) {
     const behavior = new BehaviorEngine((state) => sendToPet('pet:state', state))
     registerIpcHandlers(config, packs, llm, obsidian, skills, behavior)
 
-    createPetWindow(config.get().petPosition)
+    const startupConfig = config.get()
+    const startupPack = packs.get(startupConfig.currentPackId) ?? packs.list()[0]
+    createPetWindow({
+      ...startupConfig.petPosition,
+      scale: startupConfig.petScales[startupPack?.manifest.id ?? ''] ?? startupPack?.manifest.defaultScale ?? 1
+    })
     createPanelWindow()
     createTray(() => app.quit())
 

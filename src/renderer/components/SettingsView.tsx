@@ -50,6 +50,7 @@ export function SettingsView() {
   if (!config) return <div className="empty-state">加载中...</div>
   const cfg = config
   const currentPack = packs.find((p) => p.manifest.id === cfg.currentPackId) ?? packs[0]
+  const currentScale = cfg.petScales[cfg.currentPackId] ?? currentPack?.manifest.defaultScale ?? 1
 
   function commit(next: AppConfig) {
     setConfig(next)
@@ -59,7 +60,6 @@ export function SettingsView() {
       try {
         const saved = await window.petApi.saveConfig(next)
         setConfig(saved)
-        window.petApi.setPetSize(saved.petPosition.scale)
         setSaveState('saved')
       } catch {
         setSaveState('error')
@@ -108,7 +108,7 @@ export function SettingsView() {
   }
 
   function updateScale(scale: number) {
-    update({ petPosition: { ...cfg.petPosition, scale } })
+    update({ petScales: { ...cfg.petScales, [cfg.currentPackId]: scale } })
   }
 
   async function switchPack(packId: string) {
@@ -315,9 +315,9 @@ export function SettingsView() {
 
       <section className="settings-section">
         <h2>宠物</h2>
-        <label>大小比例（当前 {cfg.petPosition.scale}×）
-          <input type="range" min={0.5} max={2} step={0.1} value={cfg.petPosition.scale}
-            onChange={(e) => updateScale(Number(e.target.value))} onPointerUp={() => commit(cfg)} />
+        <label>大小比例（{currentPack?.manifest.name ?? cfg.currentPackId} 当前 {currentScale}×）
+          <input type="range" min={0.2} max={2} step={0.1} value={currentScale}
+            onChange={(e) => updateScale(Number(e.target.value))} />
         </label>
         <label>眨眼间隔（当前 {cfg.spine.blinkIntervalSeconds} 秒）
           <input

@@ -37,6 +37,13 @@ export function registerIpcHandlers(
     sendToPanel('pack:changed', pack)
   }
 
+  function getPetScale(packId: string): number {
+    const cfg = config.get()
+    const savedScale = cfg.petScales[packId]
+    if (Number.isFinite(savedScale)) return savedScale
+    return packs.get(packId)?.manifest.defaultScale ?? 1
+  }
+
   function stopPetDrop(): void {
     if (petDropTimer === null) return
     clearInterval(petDropTimer)
@@ -48,7 +55,7 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC.CONFIG_SAVE, (_event, cfg: AppConfig) => {
     config.save(cfg)
     app.setLoginItemSettings({ openAtLogin: cfg.autostart })
-    setPetScale(cfg.petPosition.scale)
+    setPetScale(getPetScale(cfg.currentPackId))
     const saved = config.get()
     sendToPet(IPC.CONFIG_CHANGED, saved)
     return saved
@@ -66,6 +73,7 @@ export function registerIpcHandlers(
     if (!pack) return null
     const cfg = config.get()
     config.save({ ...cfg, currentPackId: packId })
+    setPetScale(getPetScale(packId))
     behavior.start(pack)
     notifyPackChanged(pack)
     return pack
@@ -133,12 +141,13 @@ export function registerIpcHandlers(
     }, 16)
   })
 
-  ipcMain.handle(IPC.PET_SET_SIZE, (_event, scale: number) => {
+  ipcMain.handle(IPC.PET_SET_SIZE, (_event, scale: number, packId?: string) => {
     const win = getPetWindow()
     if (!win || win.isDestroyed()) return
-    setPetScale(scale)
     const cfg = config.get()
-    config.save({ ...cfg, petPosition: { ...cfg.petPosition, scale } })
+    const targetPackId = packId ?? cfg.currentPackId
+    config.save({ ...cfg, petScales: { ...cfg.petScales, [targetPackId]: scale } })
+    if (targetPackId === config.get().currentPackId) setPetScale(scale)
   })
 
   ipcMain.handle(IPC.PET_CONTEXT_MENU, (event) => {
@@ -157,6 +166,7 @@ export function registerIpcHandlers(
         click: () => {
           const nextCfg = config.get()
           config.save({ ...nextCfg, currentPackId: pack.manifest.id })
+          setPetScale(getPetScale(pack.manifest.id))
           behavior.start(pack)
           notifyPackChanged(pack)
         }

@@ -71,7 +71,8 @@ export interface AppConfig {
   api: ApiConfig
   obsidian: ObsidianConfig
   currentPackId: string
-  petPosition: { x: number; y: number; scale: number }
+  petPosition: { x: number; y: number }
+  petScales: Record<string, number>
   spine: { blinkIntervalSeconds: number }
   reminders: {
     enabled: boolean

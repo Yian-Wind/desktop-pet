@@ -7,7 +7,8 @@ const DEFAULT_CONFIG: AppConfig = {
   api: { baseUrl: '', apiKey: '', model: '', proxy: { enabled: false, url: 'http://127.0.0.1:7897' } },
   obsidian: { vaultPath: '', baseFiles: [] },
   currentPackId: 'fairy',
-  petPosition: { x: 100, y: 100, scale: 1.0 },
+  petPosition: { x: 100, y: 100 },
+  petScales: {},
   spine: { blinkIntervalSeconds: 4 },
   reminders: { enabled: true, minIntervalMinutes: 30, startHour: 9, endHour: 22 },
   autostart: false,
@@ -35,8 +36,20 @@ export class ConfigStore {
     }
   }
 
-  private merge(raw: Partial<AppConfig> & { obsidian?: Partial<AppConfig['obsidian']> & { baseFile?: string } }): AppConfig {
+  private merge(raw: Partial<AppConfig> & {
+    obsidian?: Partial<AppConfig['obsidian']> & { baseFile?: string }
+    petPosition?: Partial<AppConfig['petPosition']> & { scale?: number }
+  }): AppConfig {
     const oldObsidian = raw.obsidian as unknown as { vaultPath?: string; baseFiles?: string[]; baseFile?: string }
+    const oldPetPosition = raw.petPosition
+    const currentPackId = raw.currentPackId ?? DEFAULT_CONFIG.currentPackId
+    const petScales: Record<string, number> = {}
+    for (const [packId, scale] of Object.entries(raw.petScales ?? {})) {
+      if (Number.isFinite(scale)) petScales[packId] = scale
+    }
+    if (oldPetPosition?.scale !== undefined && Number.isFinite(oldPetPosition.scale) && petScales[currentPackId] === undefined) {
+      petScales[currentPackId] = oldPetPosition.scale
+    }
     const baseFiles = oldObsidian?.baseFiles && oldObsidian.baseFiles.length > 0
       ? oldObsidian.baseFiles
       : oldObsidian?.baseFile
@@ -47,7 +60,11 @@ export class ConfigStore {
       ...raw,
       api: { ...DEFAULT_CONFIG.api, ...raw.api, proxy: { ...DEFAULT_CONFIG.api.proxy, ...raw.api?.proxy } },
       obsidian: { vaultPath: oldObsidian?.vaultPath ?? DEFAULT_CONFIG.obsidian.vaultPath, baseFiles },
-      petPosition: { ...DEFAULT_CONFIG.petPosition, ...raw.petPosition },
+      petPosition: {
+        x: oldPetPosition?.x ?? DEFAULT_CONFIG.petPosition.x,
+        y: oldPetPosition?.y ?? DEFAULT_CONFIG.petPosition.y
+      },
+      petScales,
       spine: {
         blinkIntervalSeconds: Number.isFinite(raw.spine?.blinkIntervalSeconds)
           ? Math.min(10, Math.max(1, Number(raw.spine?.blinkIntervalSeconds)))
