@@ -26,7 +26,7 @@ const ACTION_ANIMATIONS: Record<string, string> = {
 
 const LOOP_ACTIONS = new Set(['sleep'])
 const IDLE_ANIMATION = ACTION_ANIMATIONS['idle']
-const CLICK_EXCLUDED_ANIMATIONS = new Set(['eye', 'loop', 'loop笑'])
+const CLICK_EXCLUDED_ANIMATIONS = new Set(['eye', 'loop', 'loop笑', 'walk'])
 const FIT_MARGIN = 1.15
 
 interface SpineRuntime {
