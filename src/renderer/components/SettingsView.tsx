@@ -1,26 +1,55 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Loader2, PenLine, FlaskConical } from 'lucide-react'
-import type { AppConfig } from '../../shared/types'
+import { AlertCircle, Check, FlaskConical, FolderOpen, Loader2, PenLine, Save } from 'lucide-react'
+import type { AppConfig, CorpusConfig, PersonaConfig, PetPack } from '../../shared/types'
+import { DEFAULT_CORPUS } from '../../shared/defaults'
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
+function stringify(value: unknown): string {
+  return JSON.stringify(value, null, 2)
+}
+
 export function SettingsView() {
   const [config, setConfig] = useState<AppConfig | null>(null)
-  const [packs, setPacks] = useState<Array<{ manifest: { id: string; name: string; type: string } }>>([])
+  const [packs, setPacks] = useState<PetPack[]>([])
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [testResult, setTestResult] = useState<string | null>(null)
   const [testing, setTesting] = useState(false)
+  const [personaJson, setPersonaJson] = useState('')
+  const [corpusJson, setCorpusJson] = useState('')
+  const [jsonError, setJsonError] = useState<string | null>(null)
+  const [savingJson, setSavingJson] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
+    let disposed = false
     void Promise.all([window.petApi.getConfig(), window.petApi.listPacks()]).then(([cfg, packList]) => {
+      if (disposed) return
       setConfig(cfg)
       setPacks(packList)
+      const current = packList.find((p) => p.manifest.id === cfg.currentPackId) ?? packList[0]
+      if (current) {
+        setPersonaJson(stringify(current.persona))
+        setCorpusJson(stringify(current.corpus))
+      }
     })
-    return () => { if (saveTimer.current) clearTimeout(saveTimer.current) }
+    const unsubscribe = window.petApi.onPackChanged((pack) => {
+      if (disposed) return
+      setPacks((prev) => prev.map((p) => (p.manifest.id === pack.manifest.id ? pack : p)))
+      setPersonaJson(stringify(pack.persona))
+      setCorpusJson(stringify(pack.corpus))
+      setJsonError(null)
+    })
+    return () => {
+      disposed = true
+      unsubscribe()
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+    }
   }, [])
 
   if (!config) return <div className="empty-state">加载中...</div>
+  const cfg = config
+  const currentPack = packs.find((p) => p.manifest.id === cfg.currentPackId) ?? packs[0]
 
   function commit(next: AppConfig) {
     setConfig(next)
@@ -39,94 +68,110 @@ export function SettingsView() {
   }
 
   function update(patch: Partial<AppConfig>) {
-    commit({ ...config, ...patch })
+    commit({ ...cfg, ...patch })
   }
 
   function updateApi(patch: Partial<AppConfig['api']>) {
-    update({ api: { ...config.api, ...patch } })
+    update({ api: { ...cfg.api, ...patch } })
   }
 
   function updateProxy(patch: Partial<AppConfig['api']['proxy']>) {
-    update({ api: { ...config.api, proxy: { ...config.api.proxy, ...patch } } })
+    update({ api: { ...cfg.api, proxy: { ...cfg.api.proxy, ...patch } } })
   }
 
   function updateObsidian(patch: Partial<AppConfig['obsidian']>) {
-    update({ obsidian: { ...config.obsidian, ...patch } })
-  }
-
-  function updatePersona(patch: Partial<AppConfig['persona']>) {
-    update({ persona: { ...config.persona, ...patch } })
-  }
-
-  function addTrait() {
-    update({ persona: { ...config.persona, traits: [...config.persona.traits, ''] } })
-  }
-
-  function updateTrait(index: number, value: string) {
-    const list = [...config.persona.traits]
-    list[index] = value
-    update({ persona: { ...config.persona, traits: list } })
-  }
-
-  function removeTrait(index: number) {
-    const list = [...config.persona.traits]
-    list.splice(index, 1)
-    update({ persona: { ...config.persona, traits: list } })
-  }
-
-  function addBase() {
-    update({ obsidian: { ...config.obsidian, baseFiles: [...config.obsidian.baseFiles, ''] } })
-  }
-
-  function removeBase(index: number) {
-    const list = [...config.obsidian.baseFiles]
-    list.splice(index, 1)
-    update({ obsidian: { ...config.obsidian, baseFiles: list } })
-  }
-
-  function updateBase(index: number, value: string) {
-    const list = [...config.obsidian.baseFiles]
-    list[index] = value
-    update({ obsidian: { ...config.obsidian, baseFiles: list } })
-  }
-
-  function updateTriggers(patch: Partial<AppConfig['triggers']>) {
-    update({ triggers: { ...config.triggers, ...patch } })
+    update({ obsidian: { ...cfg.obsidian, ...patch } })
   }
 
   function updateReminders(patch: Partial<AppConfig['reminders']>) {
-    update({ reminders: { ...config.reminders, ...patch } })
+    update({ reminders: { ...cfg.reminders, ...patch } })
   }
 
-  function updatePhrase(key: string, index: number, value: string) {
-    const next = { ...config.triggers.phrases }
-    const list = [...(next[key] ?? [])]
-    list[index] = value
-    next[key] = list
-    update({ triggers: { ...config.triggers, phrases: next } })
+  function addBase() {
+    update({ obsidian: { ...cfg.obsidian, baseFiles: [...cfg.obsidian.baseFiles, ''] } })
   }
 
-  function addPhrase(key: string) {
-    const next = { ...config.triggers.phrases }
-    next[key] = [...(next[key] ?? []), '']
-    update({ triggers: { ...config.triggers, phrases: next } })
-  }
-
-  function removePhrase(key: string, index: number) {
-    const next = { ...config.triggers.phrases }
-    const list = [...(next[key] ?? [])]
+  function removeBase(index: number) {
+    const list = [...cfg.obsidian.baseFiles]
     list.splice(index, 1)
-    next[key] = list
-    update({ triggers: { ...config.triggers, phrases: next } })
+    update({ obsidian: { ...cfg.obsidian, baseFiles: list } })
+  }
+
+  function updateBase(index: number, value: string) {
+    const list = [...cfg.obsidian.baseFiles]
+    list[index] = value
+    update({ obsidian: { ...cfg.obsidian, baseFiles: list } })
   }
 
   function updateScale(scale: number) {
-    update({ petPosition: { ...config.petPosition, scale } })
+    update({ petPosition: { ...cfg.petPosition, scale } })
   }
 
-  function switchPack(packId: string) {
+  async function switchPack(packId: string) {
+    const nextPack = packs.find((p) => p.manifest.id === packId)
+    if (!nextPack || packId === cfg.currentPackId) return
     update({ currentPackId: packId })
-    void window.petApi.switchPack(packId)
+    const saved = await window.petApi.switchPack(packId)
+    if (saved) {
+      setPacks((prev) => prev.map((p) => (p.manifest.id === saved.manifest.id ? saved : p)))
+      setPersonaJson(stringify(saved.persona))
+      setCorpusJson(stringify(saved.corpus))
+      setJsonError(null)
+    }
+  }
+
+  async function savePersona() {
+    if (!currentPack) return
+    setSavingJson(true)
+    setJsonError(null)
+    try {
+      const parsed = JSON.parse(personaJson) as PersonaConfig
+      if (!parsed || typeof parsed !== 'object' || typeof parsed.name !== 'string' || !parsed.name.trim()) {
+        throw new Error('persona.json 必须包含非空的字符串字段 name')
+      }
+      const saved = await window.petApi.savePersona(currentPack.manifest.id, parsed)
+      if (saved) {
+        setPacks((prev) => prev.map((p) => (p.manifest.id === saved.manifest.id ? saved : p)))
+        setPersonaJson(stringify(saved.persona))
+      }
+      setSaveState('saved')
+    } catch (e) {
+      setJsonError(e instanceof Error ? e.message : String(e))
+      setSaveState('error')
+    } finally {
+      setSavingJson(false)
+    }
+  }
+
+  async function saveCorpus() {
+    if (!currentPack) return
+    setSavingJson(true)
+    setJsonError(null)
+    try {
+      const parsed = JSON.parse(corpusJson) as Partial<CorpusConfig>
+      if (!parsed || typeof parsed !== 'object') throw new Error('corpus.json 必须是一个对象')
+      const merged: CorpusConfig = {
+        ...DEFAULT_CORPUS,
+        ...parsed,
+        phrases: { ...DEFAULT_CORPUS.phrases, ...(parsed.phrases ?? {}) }
+      }
+      const saved = await window.petApi.saveCorpus(currentPack.manifest.id, merged)
+      if (saved) {
+        setPacks((prev) => prev.map((p) => (p.manifest.id === saved.manifest.id ? saved : p)))
+        setCorpusJson(stringify(saved.corpus))
+      }
+      setSaveState('saved')
+    } catch (e) {
+      setJsonError(e instanceof Error ? e.message : String(e))
+      setSaveState('error')
+    } finally {
+      setSavingJson(false)
+    }
+  }
+
+  async function openPackDir() {
+    if (!currentPack) return
+    await window.petApi.openPackDir(currentPack.manifest.id)
   }
 
   async function runTest() {
@@ -145,38 +190,99 @@ export function SettingsView() {
     idle: <>修改自动保存</>
   }[saveState]
 
-  const triggerKeys = ['click', 'drag-end', 'idle', 'sleep', 'wake'] as const
-  const triggerLabels: Record<string, string> = {
-    click: '点击',
-    'drag-end': '拖拽结束',
-    idle: '空闲',
-    sleep: '睡觉',
-    wake: '唤醒'
-  }
-
   return (
     <div className="settings-layout">
       <div className={`save-bar save-bar--${saveState}`}>
         {saveBadge}
       </div>
 
+      <section className="settings-section role-switcher">
+        <div className="section-head">
+          <h2>角色</h2>
+          <span>切换角色会同时切换人设、语料响应规则与聊天上下文</span>
+        </div>
+        <div className="settings-row role-switcher__row">
+          {packs.map((pack) => (
+            <button
+              key={pack.manifest.id}
+              className={cfg.currentPackId === pack.manifest.id ? 'pack-button active' : 'pack-button'}
+              onClick={() => void switchPack(pack.manifest.id)}
+            >
+              <strong>{pack.manifest.name}</strong>
+              <span>{pack.manifest.type}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {currentPack ? (
+        <>
+          <section className="settings-section">
+            <div className="section-head">
+              <h2>人设配置</h2>
+              <span>packs/{currentPack.manifest.id}/persona.json</span>
+            </div>
+            <textarea
+              className="json-editor"
+              rows={12}
+              value={personaJson}
+              onChange={(e) => { setPersonaJson(e.target.value); setJsonError(null) }}
+              spellCheck={false}
+            />
+            <div className="settings-actions">
+              <button className="primary-button" onClick={() => void savePersona()} disabled={savingJson}>
+                <Save size={15} /> 保存人设 JSON
+              </button>
+              <button className="secondary-button" onClick={() => void openPackDir()}>
+                <FolderOpen size={15} /> 打开配置目录
+              </button>
+            </div>
+          </section>
+
+          <section className="settings-section">
+            <div className="section-head">
+              <h2>语料响应规则表</h2>
+              <span>packs/{currentPack.manifest.id}/corpus.json · click / drag-end / idle / sleep / wake</span>
+            </div>
+            <textarea
+              className="json-editor"
+              rows={14}
+              value={corpusJson}
+              onChange={(e) => { setCorpusJson(e.target.value); setJsonError(null) }}
+              spellCheck={false}
+            />
+            <div className="settings-actions">
+              <button className="primary-button" onClick={() => void saveCorpus()} disabled={savingJson}>
+                <Save size={15} /> 保存语料 JSON
+              </button>
+            </div>
+          </section>
+
+          {jsonError ? (
+            <div className="json-error">
+              <AlertCircle size={14} /> {jsonError}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
       <section className="settings-section">
         <h2>API</h2>
         <label>Base URL
-          <input value={config.api.baseUrl} onChange={(e) => updateApi({ baseUrl: e.target.value })} placeholder="https://api.example.com/v1" />
+          <input value={cfg.api.baseUrl} onChange={(e) => updateApi({ baseUrl: e.target.value })} placeholder="https://api.example.com/v1" />
         </label>
         <label>API Key
-          <input type="password" value={config.api.apiKey} onChange={(e) => updateApi({ apiKey: e.target.value })} placeholder="sk-..." />
+          <input type="password" value={cfg.api.apiKey} onChange={(e) => updateApi({ apiKey: e.target.value })} placeholder="sk-..." />
         </label>
         <label>Model
-          <input value={config.api.model} onChange={(e) => updateApi({ model: e.target.value })} placeholder="model-name" />
+          <input value={cfg.api.model} onChange={(e) => updateApi({ model: e.target.value })} placeholder="model-name" />
         </label>
         <label className="checkbox-row">
-          <input type="checkbox" checked={config.api.proxy.enabled} onChange={(e) => updateProxy({ enabled: e.target.checked })} />
+          <input type="checkbox" checked={cfg.api.proxy.enabled} onChange={(e) => updateProxy({ enabled: e.target.checked })} />
           通过本地代理访问 API
         </label>
         <label>代理地址
-          <input value={config.api.proxy.url} onChange={(e) => updateProxy({ url: e.target.value })} placeholder="http://127.0.0.1:7897" />
+          <input value={cfg.api.proxy.url} onChange={(e) => updateProxy({ url: e.target.value })} placeholder="http://127.0.0.1:7897" />
         </label>
         <div className="settings-row">
           <button className="secondary-button" onClick={() => void runTest()} disabled={testing}>
@@ -187,42 +293,13 @@ export function SettingsView() {
       </section>
 
       <section className="settings-section">
-        <h2>人设</h2>
-        <label className="checkbox-row">
-          <input type="checkbox" checked={config.persona.enabled} onChange={(e) => updatePersona({ enabled: e.target.checked })} />
-          启用自定义人设（优先于角色包内置人设）
-        </label>
-        <label>角色名
-          <input value={config.persona.name} onChange={(e) => updatePersona({ name: e.target.value })} placeholder="例如：玛拉妮" />
-        </label>
-        <label>简介
-          <input value={config.persona.description} onChange={(e) => updatePersona({ description: e.target.value })} placeholder="角色一句话简介" />
-        </label>
-        <label>性格
-          <input value={config.persona.personality} onChange={(e) => updatePersona({ personality: e.target.value })} placeholder="外向 / 冷静 / 傲娇…" />
-        </label>
-        <label>特质（可多条）
-          {config.persona.traits.map((trait, i) => (
-            <div className="phrase-row" key={i}>
-              <input value={trait} onChange={(e) => updateTrait(i, e.target.value)} placeholder="一个特质" />
-              <button className="icon-button" onClick={() => removeTrait(i)} title="删除">×</button>
-            </div>
-          ))}
-          <button className="secondary-button phrase-add" onClick={addTrait}>+ 添加特质</button>
-        </label>
-        <label>系统提示（人设）
-          <textarea rows={10} value={config.persona.systemPrompt} onChange={(e) => updatePersona({ systemPrompt: e.target.value })} placeholder="描述角色的身份、性格、说话方式、回复风格、禁忌…" />
-        </label>
-      </section>
-
-      <section className="settings-section">
         <h2>Obsidian</h2>
         <label>Vault 路径
-          <input value={config.obsidian.vaultPath} onChange={(e) => updateObsidian({ vaultPath: e.target.value })} placeholder="D:/.../Vault" />
+          <input value={cfg.obsidian.vaultPath} onChange={(e) => updateObsidian({ vaultPath: e.target.value })} placeholder="D:/.../Vault" />
         </label>
         <div className="phrase-group">
           <label className="phrase-label">Base 文件（可多条）</label>
-          {config.obsidian.baseFiles.map((path, index) => (
+          {cfg.obsidian.baseFiles.map((path, index) => (
             <div className="phrase-row" key={index}>
               <input value={path} onChange={(e) => updateBase(index, e.target.value)} placeholder="D:/.../视图.base" />
               <button className="icon-button" onClick={() => removeBase(index)} title="删除">×</button>
@@ -233,77 +310,28 @@ export function SettingsView() {
       </section>
 
       <section className="settings-section">
-        <h2>角色</h2>
-        <div className="settings-row">
-          {packs.map((pack) => (
-            <button
-              key={pack.manifest.id}
-              className={config.currentPackId === pack.manifest.id ? 'pack-button active' : 'pack-button'}
-              onClick={() => switchPack(pack.manifest.id)}
-            >
-              {pack.manifest.name} · {pack.manifest.type}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="settings-section">
         <h2>宠物</h2>
-        <label>大小比例（当前 {config.petPosition.scale}×）
-          <input type="range" min={0.5} max={2} step={0.1} value={config.petPosition.scale}
-            onChange={(e) => updateScale(Number(e.target.value))} onPointerUp={() => commit(config)} />
+        <label>大小比例（当前 {cfg.petPosition.scale}×）
+          <input type="range" min={0.5} max={2} step={0.1} value={cfg.petPosition.scale}
+            onChange={(e) => updateScale(Number(e.target.value))} onPointerUp={() => commit(cfg)} />
         </label>
-      </section>
-
-      <section className="settings-section">
-        <h2>触发语料</h2>
-        <label className="checkbox-row">
-          <input type="checkbox" checked={config.triggers.enabled} onChange={(e) => updateTriggers({ enabled: e.target.checked })} />
-          启用主动触发
-        </label>
-        <div className="settings-row">
-          <label>空闲提醒（分钟）
-            <input type="number" min={1} value={config.triggers.idleAfterMinutes}
-              onChange={(e) => updateTriggers({ idleAfterMinutes: Number(e.target.value) })} />
-          </label>
-          <label>睡觉（分钟）
-            <input type="number" min={2} value={config.triggers.sleepAfterMinutes}
-              onChange={(e) => updateTriggers({ sleepAfterMinutes: Number(e.target.value) })} />
-          </label>
-          <label>提醒冷却（分钟）
-            <input type="number" min={1} value={config.triggers.idleCooldownMinutes}
-              onChange={(e) => updateTriggers({ idleCooldownMinutes: Number(e.target.value) })} />
-          </label>
-        </div>
-        {triggerKeys.map((key) => (
-          <div className="phrase-group" key={key}>
-            <label className="phrase-label">{triggerLabels[key]}</label>
-            {(config.triggers.phrases[key] ?? []).map((phrase, i) => (
-              <div className="phrase-row" key={i}>
-                <input value={phrase} onChange={(e) => updatePhrase(key, i, e.target.value)} placeholder="触发语料" />
-                <button className="icon-button" onClick={() => removePhrase(key, i)} title="删除">×</button>
-              </div>
-            ))}
-            <button className="secondary-button phrase-add" onClick={() => addPhrase(key)}>+ 添加</button>
-          </div>
-        ))}
       </section>
 
       <section className="settings-section">
         <h2>提醒</h2>
         <label className="checkbox-row">
-          <input type="checkbox" checked={config.reminders.enabled} onChange={(e) => updateReminders({ enabled: e.target.checked })} />
+          <input type="checkbox" checked={cfg.reminders.enabled} onChange={(e) => updateReminders({ enabled: e.target.checked })} />
           启用主动提醒
         </label>
         <label>提醒间隔（分钟）
-          <input type="number" value={config.reminders.minIntervalMinutes} onChange={(e) => updateReminders({ minIntervalMinutes: Number(e.target.value) })} />
+          <input type="number" value={cfg.reminders.minIntervalMinutes} onChange={(e) => updateReminders({ minIntervalMinutes: Number(e.target.value) })} />
         </label>
         <div className="settings-row">
           <label>开始
-            <input type="number" min={0} max={23} value={config.reminders.startHour} onChange={(e) => updateReminders({ startHour: Number(e.target.value) })} />
+            <input type="number" min={0} max={23} value={cfg.reminders.startHour} onChange={(e) => updateReminders({ startHour: Number(e.target.value) })} />
           </label>
           <label>结束
-            <input type="number" min={0} max={23} value={config.reminders.endHour} onChange={(e) => updateReminders({ endHour: Number(e.target.value) })} />
+            <input type="number" min={0} max={23} value={cfg.reminders.endHour} onChange={(e) => updateReminders({ endHour: Number(e.target.value) })} />
           </label>
         </div>
       </section>
@@ -311,12 +339,12 @@ export function SettingsView() {
       <section className="settings-section">
         <h2>行为与启动</h2>
         <label className="checkbox-row">
-          <input type="checkbox" checked={config.autostart} onChange={(e) => update({ autostart: e.target.checked })} />
+          <input type="checkbox" checked={cfg.autostart} onChange={(e) => update({ autostart: e.target.checked })} />
           开机自启
         </label>
         <label>行为模式
-          <select value={config.behaviorMode} onChange={(e) => update({ behaviorMode: e.target.value as 'rules' | 'llm' })}>
-            <option value="rules">规则驱动（Fairy 默认）</option>
+          <select value={cfg.behaviorMode} onChange={(e) => update({ behaviorMode: e.target.value as 'rules' | 'llm' })}>
+            <option value="rules">规则驱动（使用角色包 corpus.json）</option>
             <option value="llm">LLM 决策（预留）</option>
           </select>
         </label>

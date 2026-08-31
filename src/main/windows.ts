@@ -4,6 +4,15 @@ import { join } from 'node:path'
 let petWindow: BrowserWindow | null = null
 let panelWindow: BrowserWindow | null = null
 
+function loadRenderer(win: BrowserWindow, windowName: string): void {
+  const devUrl = process.env['ELECTRON_RENDERER_URL']
+  if (devUrl) {
+    void win.loadURL(`${devUrl}/?window=${windowName}`)
+  } else {
+    void win.loadFile(join(__dirname, '../renderer/index.html'), { query: { window: windowName } })
+  }
+}
+
 export function createPetWindow(position: { x: number; y: number; scale: number }): BrowserWindow {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
   const size = 320 * (position.scale || 1)
@@ -25,7 +34,7 @@ export function createPetWindow(position: { x: number; y: number; scale: number 
     }
   })
   petWindow.setAlwaysOnTop(true, 'screen-saver')
-  petWindow.loadFile(join(__dirname, '../renderer/index.html'), { query: { window: 'pet' } })
+  loadRenderer(petWindow, 'pet')
   return petWindow
 }
 
@@ -41,7 +50,7 @@ export function createPanelWindow(): BrowserWindow {
       nodeIntegration: false
     }
   })
-  panelWindow.loadFile(join(__dirname, '../renderer/index.html'), { query: { window: 'panel' } })
+  loadRenderer(panelWindow, 'panel')
   return panelWindow
 }
 

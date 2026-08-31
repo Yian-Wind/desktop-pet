@@ -1,13 +1,15 @@
-export type PetPackType = 'gif' | 'live2d'
+export type PetPackType = 'gif' | 'live2d' | 'spine'
+export type PetDirection = 'left' | 'right'
 
 export type BehaviorMode = 'rules' | 'llm'
 
 export interface PersonaConfig {
   name: string
-  description: string
+  description?: string
   personality?: string
   systemPrompt?: string
   traits?: string[]
+  [key: string]: unknown
 }
 
 export interface PetPackManifest {
@@ -22,10 +24,20 @@ export interface PetPackManifest {
   assetPaths?: Record<string, string>
 }
 
+export interface CorpusConfig {
+  enabled: boolean
+  idleAfterMinutes: number
+  sleepAfterMinutes: number
+  idleCooldownMinutes: number
+  phrases: Record<string, string[]>
+}
+
 export interface PetPack {
   manifest: PetPackManifest
   rootDir: string
   assets: Record<string, string>
+  persona: PersonaConfig
+  corpus: CorpusConfig
 }
 
 export interface ApiConfig {
@@ -45,23 +57,6 @@ export interface ObsidianConfig {
   baseFiles: string[]
 }
 
-export interface PersonaPromptConfig {
-  enabled: boolean
-  name: string
-  description: string
-  personality: string
-  systemPrompt: string
-  traits: string[]
-}
-
-export interface TriggerConfig {
-  enabled: boolean
-  idleAfterMinutes: number
-  sleepAfterMinutes: number
-  idleCooldownMinutes: number
-  phrases: Record<string, string[]>
-}
-
 export interface PetWindowState {
   packId: string
   action: string
@@ -70,15 +65,14 @@ export interface PetWindowState {
   bubbleVisible: boolean
   busy: boolean
   packType: PetPackType
+  direction: PetDirection
 }
 
 export interface AppConfig {
   api: ApiConfig
   obsidian: ObsidianConfig
-  persona: PersonaPromptConfig
   currentPackId: string
   petPosition: { x: number; y: number; scale: number }
-  triggers: TriggerConfig
   reminders: {
     enabled: boolean
     minIntervalMinutes: number
@@ -106,7 +100,7 @@ export interface TodoItem {
 }
 
 export interface PetEvent {
-  type: 'click' | 'drag-start' | 'drag-end' | 'idle' | 'sleep' | 'wake' | 'chat-open' | 'chat-close'
+  type: 'click' | 'drag-start' | 'drag-end' | 'direction-change' | 'idle' | 'sleep' | 'wake' | 'chat-open' | 'chat-close'
   payload?: Record<string, unknown>
 }
 

@@ -1,7 +1,12 @@
 import type { PetPack, PetWindowState } from '../../shared/types'
 import { GifPetAdapter, Live2DPetAdapter } from './PetVisualAdapter'
+import { SpinePetVisual } from './SpinePetVisual'
 
 export function PetVisual({ pack, state }: { pack: PetPack; state: PetWindowState }) {
+  if (pack.manifest.type === 'spine') {
+    return <SpinePetVisual pack={pack} state={state} />
+  }
+
   const adapter = pack.manifest.type === 'live2d' ? new Live2DPetAdapter() : new GifPetAdapter()
   adapter.load(pack)
   adapter.play(state)

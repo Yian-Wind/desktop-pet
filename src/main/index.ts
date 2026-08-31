@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app } from 'electron'
 import { registerPetAssetProtocol, registerPetAssetHandler } from './protocol'
 import { createPetWindow, createPanelWindow, getPetWindow, sendToPet } from './windows'
 import { createTray } from './tray'
@@ -33,14 +33,14 @@ if (!gotLock) {
     skills.register(createChatSkill())
     skills.register(createTodoSkill())
 
-    const behavior = new BehaviorEngine((state) => sendToPet('pet:state', state), config.get().triggers)
+    const behavior = new BehaviorEngine((state) => sendToPet('pet:state', state))
     registerIpcHandlers(config, packs, llm, obsidian, skills, behavior)
 
     createPetWindow(config.get().petPosition)
     createPanelWindow()
     createTray(() => app.quit())
 
-    const currentPack = packs.get(config.get().currentPackId) ?? packs.list()[0]
+    const currentPack = packs.get('mualani') ?? packs.list()[0]
     if (currentPack) behavior.start(currentPack)
   })
 

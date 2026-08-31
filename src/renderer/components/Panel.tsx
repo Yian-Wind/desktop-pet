@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { MessageCircle, ListTodo, Settings, X } from 'lucide-react'
+import type { PetPack } from '../../shared/types'
 import { ChatView } from './ChatView'
 import { TodoView } from './TodoView'
 import { SettingsView } from './SettingsView'
@@ -14,13 +15,30 @@ const tabs: Array<{ id: Tab; label: string; icon: typeof MessageCircle }> = [
 
 export function Panel() {
   const [tab, setTab] = useState<Tab>('chat')
+  const [pack, setPack] = useState<PetPack | null>(null)
+
+  useEffect(() => {
+    let disposed = false
+    async function init() {
+      const cfg = await window.petApi.getConfig()
+      const packList = await window.petApi.listPacks()
+      const current = packList.find((p) => p.manifest.id === cfg.currentPackId) ?? packList[0]
+      if (!disposed) setPack(current ?? null)
+    }
+    void init()
+    const unsubscribe = window.petApi.onPackChanged((next) => setPack(next))
+    return () => {
+      disposed = true
+      unsubscribe()
+    }
+  }, [])
 
   return (
     <div className="panel-shell">
       <header className="panel-header">
         <div>
           <h1>Desktop Pet</h1>
-          <p>Fairy · 待办与对话面板</p>
+          <p>{pack ? `${pack.manifest.name} · 待办与对话面板` : '待办与对话面板'}</p>
         </div>
         <button className="icon-button" onClick={() => window.petApi.closePanel()} title="关闭">
           <X size={18} />

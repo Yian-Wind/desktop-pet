@@ -17,7 +17,7 @@
 - **角色数量**: 单宠运行，通过设置面板切换 Pet Pack
 - **角色支持**:
   - Fairy: 直接使用参考 GIF，不生产额外动画素材
-  - 第二角色 (Mualani/玛拉妮): 使用 WebM 透明动画，首版最小动作集 + 对话气泡，后续扩展完整动作集
+  - 第二角色 (Mualani/玛拉妮): 使用 Spine 4.2 骨骼动画，已内置基础动作集与对话气泡
 - **技能集**: AI 对话 + Obsidian 待办查询/提醒，无天气/系统自动化等附加功能
 - **Obsidian 集成**: 通过 `.base` 文件入口，读取待办文件夹下的 Markdown 文件，只读+受控写回
 
@@ -29,7 +29,7 @@
 
 ### 1.4 验收标准
 - 在 Windows 10/11 可安装/运行，窗口透明且置顶
-- Fairy 以 GIF 显示，第二角色能播放 WebM 动作和对话气泡
+- Fairy 以 GIF 显示，第二角色能播放 Spine 骨骼动画和对话气泡
 - 配置自定义 OpenAI-compatible API 后可对话，断网/无 Key 时宠物保持基本待机和交互
 - 配置 Obsidian 库路径后，能读取待办 `.base` 和对应 `.md` 文件，展示待办并触发受控提醒
 - 新增/完成/修改待办需经用户确认
@@ -42,7 +42,7 @@
 |------|----------|
 | 桌面框架 | Electron 28+ |
 | 前端 | TypeScript + React 18+ |
-| 动画 | WebM VP9-alpha (Chrome/Chromium) + GIF |
+| 动画 | Spine 4.2 (spine-canvas) + GIF |
 | 状态管理 | React Context + 轻量 Store |
 | 构建 | Vite + electron-builder |
 | 安全存储 | electron-store 或系统 keychain |
@@ -69,7 +69,7 @@
 │                React 渲染进程                          │
 │  ┌──────────────┐  ┌───────────────┐                 │
 │  │宠物窗口(透明置顶) │  │面板窗口(设置/待办)│              │
-│  │ WebM/GIF 播放  │  │ 对话历史/待办列表│              │
+│  │ Spine/GIF 播放  │  │ 对话历史/待办列表│              │
 │  │ 点击/拖拽/右键  │  │ 设置/告警确认  │              │
 │  │ 气泡/通知      │  │               │              │
 │  └──────────────┘  └───────────────┘                 │
@@ -104,7 +104,7 @@
 
 **PetPackManager**: 角色包加载
 - 加载 Pet Pack 清单 (manifest.json)
-- 管理角色素材目录 (GIF / WebM 动画 + 配置文件)
+- 管理角色素材目录 (GIF / Spine 动画 + JSON 配置)
 - 切换角色时通知窗口重新加载
 
 **Tray/Window/Startup**: 系统集成
@@ -115,7 +115,7 @@
 ### 3.2 渲染进程模块
 
 **宠物窗口**: 透明置顶无边框窗口
-- 播放 WebM 透明动画 (Chrome 原生 `<video>` 支持)
+- 播放 Spine 骨骼动画 (spine-canvas 渲染)
 - 播放 GIF 动画 (Fairy 模式)
 - 气泡显示 (对话/提醒/情感)
 - 鼠标事件: 点击反应、拖拽甩抛、右键菜单
@@ -141,16 +141,12 @@ packs/
 │   └── config.jsonc                # 角色配置 (权重/缩放)
 │
 └── mualani/                        # 第二角色 (Mualani)
-    ├── manifest.json               # 角色包清单
-    ├── animations/                 # WebM 动画目录
-    │   ├── idle.webm               # 待机
-    │   ├── click.webm              # 点击反应
-    │   ├── drag.webm               # 拖拽
-    │   ├── sleep.webm              # 睡觉
-    │   └── bubble.webm             # 对话气泡 (可选)
-    ├── assets/                     # 辅助素材
-    │   └── cursor.png              # 光标
-    └── config.jsonc                # 角色配置
+    ├── manifest.json               # 角色包清单 (type: "spine")
+    ├── mualani.json                # Spine 骨骼数据
+    ├── sl.atlas                    # Spine 图集索引
+    ├── mlnxr.png                   # Spine 图集贴图
+    ├── persona.json                # 人设配置 (JSON 可编辑)
+    └── corpus.json                 # 语料响应规则表 (JSON 可编辑)
 ```
 
 ### 4.2 manifest.json 字段
@@ -160,9 +156,9 @@ packs/
   "id": "mualani",
   "name": "Mualani",
   "version": "1.0.0",
-  "type": "webm",
+  "type": "spine",
   "animations": [
-    "idle", "click", "drag", "sleep", "bubble"
+    "loop", "walk", "抬手示意", "冲浪"
   ],
   "defaultScale": 1.0,
   "author": ""
@@ -270,6 +266,10 @@ interface SkillResult {
 
 ## 8. 素材管线 (Mualani/玛拉妮)
 
+### 8.0 已确认素材（当前实现）
+
+`pet_reference/Mualani/` 已确认为 **Spine 4.2.35** 导出的骨骼动画：`mlnxr.json` + `sl.atlas` + `mlnxr.png`（图集单页，17 个动画，63 个 region）。运行副本位于 `packs/mualani/`，由 `SpinePetVisual`（spine-canvas）加载渲染；`images/` 目录保留拆分源文件。下方 8.1-8.3 为早期调研记录，已被实际素材取代。
+
 ### 8.1 调研结论
 
 玛拉妮的素材制作有多条可行路线，按成熟度和质量排序:
@@ -361,7 +361,7 @@ interface SkillResult {
 | 阶段 | 内容 | 交付物 |
 |------|------|--------|
 | M1 核心框架 | Electron 窗口, 透明置顶, 托盘, 设置面板, Fairy GIF 显示, 点击/拖拽 | 可运行桌宠应用 |
-| M2 动画与交互 | Pet Pack 加载, WebM 播放, 第二角色动作集, 气泡/右键菜单 | 双角色可切换 |
+| M2 动画与交互 | Pet Pack 加载, Spine 播放, 第二角色动作集, 气泡/右键菜单 | 双角色可切换 |
 | M3 AI 对话 | LLMClient, 预设 OpenAI-compatible 配置, 气泡对话, 面板对话历史 | 可对话桌宠 |
 | M4 行为引擎 | BehaviorEngine, LLM 决策 + 规则回退, 情绪/动作联动 | 非 LLM 时也有基本行为 |
 | M5 Obsidian 待办 | ObsidianBaseService, 面板待办列表, 受控写回, 主动提醒 | 完整待办能力 |
@@ -371,7 +371,7 @@ interface SkillResult {
 
 ## 11. 待定项
 
-- Mualani 素材路线: 等待用户确认走 3D 提取还是 AI 视频生成路线
+- Mualani 素材路线: 已确认使用现有 Spine 4.2 素材，动作映射可配置化待做
 - 面板 UI 设计: 具体 layout 和交互细节 (后续设计阶段定)
 - 动画素材具体数量: 按最小动作集先做, 后续扩展
 - 打包/分发方式: 安装包计划 (后续定)
@@ -383,11 +383,11 @@ interface SkillResult {
 - Electron + TypeScript + React + Vite 工程已搭好 (`npm run dev` / `npm run build`)
 - Fairy 以 GIF 显示，`pet-asset://` 协议加载角色素材
 - 宠物窗口: 透明置顶、点击反应、拖拽甩抛、右键菜单、气泡
-- 面板窗口: 对话历史、Obsidian 待办、设置 (API/Vault/角色/提醒/自启)
+- 面板窗口: 对话历史、Obsidian 待办、设置 (API/Vault/角色 JSON 人设/语料/提醒/自启)
 - 技能总线: `chat` 与 `obsidian-todos` 两个技能已注册
 - LLMClient: OpenAI-compatible 自定义接口
 - ObsidianBaseService: 解析 `.base` filters, 扫描 Markdown 待办, frontmatter 读写
-- Pet Pack 抽象 + Live2D 渲染接口预留 (`PetVisualAdapter` / `Live2DPetAdapter`)
+- Pet Pack 抽象 + Spine 渲染实装 (`SpinePetVisual`，spine-canvas)，Live2D 接口仍预留 (`Live2DPetAdapter`)
 
 已验证: `npm run build` 通过，Electron 启动成功，Fairy GIF 渲染正常 (640×480 源图缩放至 320×320 窗口)。
 
@@ -399,7 +399,7 @@ interface SkillResult {
 |---|------|------|
 | 1 | 产品内核 | 陪伴型桌宠, 技能作为附加能力 |
 | 2 | 首版平台 | Windows 10/11 |
-| 3 | 形象形态 | Fairy: GIF; Mualani: Q版 Live2D (用户自备素材, 预留接口) |
+| 3 | 形象形态 | Fairy: GIF; Mualani: Spine 4.2 骨骼动画 (现有素材, 已接入) |
 | 4 | 技术栈 | Electron + TypeScript + React |
 | 5 | 技能架构 | 插件式技能总线 + OpenAI-compatible Provider |
 | 6 | Obsidian 集成 | 直接读写本地文件/`.base` |

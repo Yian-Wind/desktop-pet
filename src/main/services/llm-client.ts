@@ -12,7 +12,7 @@ export class LLMClient {
       const dispatcher = config.proxy?.enabled && config.proxy.url
         ? new ProxyAgent(config.proxy.url)
         : undefined
-      response = await fetch(endpoint, {
+      const requestInit = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -24,7 +24,8 @@ export class LLMClient {
         }),
         dispatcher,
         signal: AbortSignal.timeout(30000)
-      })
+      } as RequestInit
+      response = await fetch(endpoint, requestInit)
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e)
       throw new Error(`网络请求失败: ${detail}`)

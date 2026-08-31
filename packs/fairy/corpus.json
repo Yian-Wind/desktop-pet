@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "idleAfterMinutes": 3,
+  "sleepAfterMinutes": 10,
+  "idleCooldownMinutes": 5,
+  "phrases": {
+    "click": ["戳到我啦~", "嘿嘿，好痒~", "有事找我吗？"],
+    "drag-end": ["飞起来啦！", "哇啊——", "放我下来！"],
+    "idle": ["我在呢~", "今天过得怎么样？", "需要我帮你记点事吗？"],
+    "sleep": ["呼...呼...", "让我眯一会儿…", "Zzz…"],
+    "wake": ["我醒啦！", "刚刚睡饱了~", "回来啦！"]
+  }
+}

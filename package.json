@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
   },
   "dependencies": {
+    "@esotericsoftware/spine-canvas": "4.2.120",
+    "@esotericsoftware/spine-webgl": "4.2.120",
     "gray-matter": "^4.0.3",
     "js-yaml": "^5.4.1",
     "lucide-react": "^1.37.0",

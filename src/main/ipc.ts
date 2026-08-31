@@ -1,15 +1,13 @@
-import { app, dialog, ipcMain, BrowserWindow, Menu } from 'electron'
+import { app, ipcMain, BrowserWindow, Menu, shell } from 'electron'
 import { IPC } from '../shared/ipc-channels'
-import type { AppConfig, ChatMessage, PetEvent } from '../shared/types'
+import type { AppConfig, ChatMessage, CorpusConfig, PersonaConfig, PetEvent, PetPack } from '../shared/types'
 import { ConfigStore } from './config'
 import { PetPackManager } from './services/pet-pack-manager'
 import { LLMClient } from './services/llm-client'
 import { ObsidianBaseService } from './services/obsidian-base'
 import { SkillBus } from './skill-bus'
-import { createChatSkill } from './skills/chat'
-import { createTodoSkill } from './skills/obsidian-todos'
 import { BehaviorEngine } from './behavior-engine'
-import { getPetWindow, openPanel, sendToPet, setPetScale } from './windows'
+import { getPetWindow, openPanel, sendToPanel, sendToPet, setPetScale } from './windows'
 
 export function registerIpcHandlers(
   config: ConfigStore,
@@ -19,14 +17,27 @@ export function registerIpcHandlers(
   skills: SkillBus,
   behavior: BehaviorEngine
 ): void {
-  const chatHistory: ChatMessage[] = []
+  const chatHistoryByPack = new Map<string, ChatMessage[]>()
+
+  function getChatHistory(packId: string): ChatMessage[] {
+    return chatHistoryByPack.get(packId) ?? []
+  }
+
+  function pushChat(packId: string, ...messages: ChatMessage[]): void {
+    const history = getChatHistory(packId)
+    history.push(...messages)
+    chatHistoryByPack.set(packId, history)
+  }
+
+  function notifyPackChanged(pack: PetPack): void {
+    sendToPanel('pack:changed', pack)
+  }
 
   ipcMain.handle(IPC.CONFIG_GET, () => config.get())
 
   ipcMain.handle(IPC.CONFIG_SAVE, (_event, cfg: AppConfig) => {
     config.save(cfg)
     app.setLoginItemSettings({ openAtLogin: cfg.autostart })
-    behavior.setTriggers(cfg.triggers)
     setPetScale(cfg.petPosition.scale)
     return config.get()
   })
@@ -39,7 +50,29 @@ export function registerIpcHandlers(
     const cfg = config.get()
     config.save({ ...cfg, currentPackId: packId })
     behavior.start(pack)
+    notifyPackChanged(pack)
     return pack
+  })
+
+  ipcMain.handle(IPC.PACK_SAVE_PERSONA, (_event, packId: string, persona: PersonaConfig) => {
+    const pack = packs.savePersona(packId, persona)
+    if (!pack) return null
+    notifyPackChanged(pack)
+    return pack
+  })
+
+  ipcMain.handle(IPC.PACK_SAVE_CORPUS, (_event, packId: string, corpus: CorpusConfig) => {
+    const pack = packs.saveCorpus(packId, corpus)
+    if (!pack) return null
+    if (config.get().currentPackId === packId) behavior.start(pack)
+    notifyPackChanged(pack)
+    return pack
+  })
+
+  ipcMain.handle(IPC.PACK_OPEN_DIR, async (_event, packId: string) => {
+    const pack = packs.get(packId)
+    if (!pack) return '未找到角色包'
+    return shell.openPath(pack.rootDir)
   })
 
   ipcMain.handle(IPC.PET_GET_STATE, () => behavior.getState())
@@ -81,6 +114,7 @@ export function registerIpcHandlers(
           const nextCfg = config.get()
           config.save({ ...nextCfg, currentPackId: pack.manifest.id })
           behavior.start(pack)
+          notifyPackChanged(pack)
         }
       })),
       { type: 'separator' as const },
@@ -89,15 +123,15 @@ export function registerIpcHandlers(
     Menu.buildFromTemplate(template).popup({ window: win })
   })
 
-  ipcMain.handle(IPC.CHAT_GET_HISTORY, () => chatHistory)
+  ipcMain.handle(IPC.CHAT_GET_HISTORY, () => getChatHistory(config.get().currentPackId))
 
   ipcMain.handle(IPC.CHAT_SEND, async (_event, text: string) => {
     const cfg = config.get()
     const pack = packs.get(cfg.currentPackId)
-    const persona = pack?.manifest.persona
-    const systemPrompt = buildPersonaPrompt(cfg.persona.enabled ? cfg.persona : persona)
+    const systemPrompt = pack ? buildPersonaPrompt(pack.persona) : ''
     const userMessage: ChatMessage = { role: 'user', content: text, timestamp: Date.now() }
-    const messages: ChatMessage[] = [...chatHistory.slice(-20), userMessage]
+    const history = getChatHistory(cfg.currentPackId)
+    const messages: ChatMessage[] = [...history.slice(-20), userMessage]
     if (systemPrompt) {
       messages.unshift({ role: 'system', content: systemPrompt, timestamp: Date.now() })
     }
@@ -109,21 +143,21 @@ export function registerIpcHandlers(
     })
     if (result.success && typeof result.data === 'string') {
       const reply: ChatMessage = { role: 'assistant', content: result.data, timestamp: Date.now() }
-      chatHistory.push(userMessage, reply)
+      pushChat(cfg.currentPackId, userMessage, reply)
       behavior.setBubble(result.bubble ?? '')
       return reply
     }
-    chatHistory.push(userMessage)
+    pushChat(cfg.currentPackId, userMessage)
     return { error: result.error ?? '对话失败' }
   })
 
   ipcMain.handle(IPC.CHAT_TEST, async () => {
     const cfg = config.get()
     const pack = packs.get(cfg.currentPackId)
-    const persona = pack?.manifest.persona
-    const system = buildPersonaPrompt(cfg.persona.enabled ? cfg.persona : persona) || '你是一个桌面宠物助手。'
+    const system = pack ? buildPersonaPrompt(pack.persona) : ''
+    const fallback = pack ? `你叫${pack.manifest.name}，是一个桌面宠物助手。` : '你是一个桌面宠物助手。'
     const messages: ChatMessage[] = [
-      { role: 'system', content: system, timestamp: Date.now() },
+      { role: 'system', content: system || fallback, timestamp: Date.now() },
       { role: 'user', content: '请用你的角色身份做一次自我介绍，并说明你此刻的状态。', timestamp: Date.now() }
     ]
     const result = await skills.execute('chat', { messages }, {

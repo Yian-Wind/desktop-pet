@@ -17,3 +17,9 @@ Thumbs.db
 # npm 临时
 npm-debug.log*
 yarn-error.log*
+
+# 本地参考与生成产物
+pet_reference/
+tools/vendor/
+spine-reference*.png
+packs/**/*.json.bak

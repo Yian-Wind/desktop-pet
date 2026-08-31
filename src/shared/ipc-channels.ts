@@ -3,6 +3,9 @@ export const IPC = {
   CONFIG_SAVE: 'config:save',
   PACK_LIST: 'pack:list',
   PACK_SWITCH: 'pack:switch',
+  PACK_SAVE_PERSONA: 'pack:save-persona',
+  PACK_SAVE_CORPUS: 'pack:save-corpus',
+  PACK_OPEN_DIR: 'pack:open-dir',
   PET_GET_STATE: 'pet:get-state',
   PET_EVENT: 'pet:event',
   PET_MOVE: 'pet:move',
@@ -16,5 +19,5 @@ export const IPC = {
   OBSIDIAN_COMPLETE_TODO: 'obsidian:complete-todo',
   WINDOW_OPEN_PANEL: 'window:open-panel',
   WINDOW_CLOSE_PANEL: 'window:close-panel',
-  WINDOW_QUIT: 'window:quit',
+  WINDOW_QUIT: 'window:quit'
 } as const
