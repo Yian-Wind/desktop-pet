@@ -26,6 +26,7 @@ const ACTION_ANIMATIONS: Record<string, string> = {
 
 const LOOP_ACTIONS = new Set(['sleep'])
 const IDLE_ANIMATION = ACTION_ANIMATIONS['idle']
+const CLICK_EXCLUDED_ANIMATIONS = new Set(['eye', 'loop', 'loop笑'])
 const FIT_MARGIN = 1.15
 
 interface SpineRuntime {
@@ -56,6 +57,13 @@ function createCombinedSkin(skeleton: Skeleton): Skin | null {
   combinedSkin.addSkin(defaultSkin)
   combinedSkin.addSkin(directionSkin)
   return combinedSkin
+}
+
+function pickRandomClickAnimation(skeleton: Skeleton, animations: string[]): string {
+  const choices = animations.filter((name) => {
+    return !CLICK_EXCLUDED_ANIMATIONS.has(name) && skeleton.data.findAnimation(name) !== null
+  })
+  return choices[Math.floor(Math.random() * choices.length)] ?? ACTION_ANIMATIONS['click']
 }
 
 export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, onHitTestReady }: SpinePetVisualProps) {
@@ -189,17 +197,19 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
     if (!runtime || !ready) return
 
     if (state.action === 'drag') return
-    const animationName = ACTION_ANIMATIONS[state.action] ?? IDLE_ANIMATION
+    const animationName = state.action === 'click'
+      ? pickRandomClickAnimation(runtime.skeleton, pack.manifest.animations)
+      : ACTION_ANIMATIONS[state.action] ?? IDLE_ANIMATION
     if (!runtime.skeleton.data.findAnimation(animationName)) return
     const loop = LOOP_ACTIONS.has(state.action)
     if (runtime.currentAction === state.action) {
-      if (!loop) runtime.state.setAnimation(0, animationName, false)
+      if (state.action === 'click' || !loop) runtime.state.setAnimation(0, animationName, false)
       return
     }
 
     runtime.currentAction = state.action
     runtime.state.setAnimation(0, animationName, loop)
-  }, [state.action, ready])
+  }, [state.action, state.actionNonce, ready, pack.manifest.animations])
 
   useEffect(() => {
     if (!ready) return

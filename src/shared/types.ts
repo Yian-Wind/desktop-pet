@@ -59,6 +59,7 @@ export interface ObsidianConfig {
 export interface PetWindowState {
   packId: string
   action: string
+  actionNonce: number
   emotion: string
   bubble: string
   bubbleVisible: boolean

@@ -119,7 +119,7 @@ export function registerIpcHandlers(
 
     const startX = bounds.x
     const startY = bounds.y
-    const duration = 280
+    const duration = 140
     const startedAt = Date.now()
     petDropTimer = setInterval(() => {
       const currentWindow = getPetWindow()

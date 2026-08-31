@@ -10,6 +10,7 @@ export class BehaviorEngine {
   private state: PetWindowState = {
     packId: 'fairy',
     action: 'idle',
+    actionNonce: 0,
     emotion: 'neutral',
     bubble: '',
     bubbleVisible: false,
@@ -57,6 +58,7 @@ export class BehaviorEngine {
 
   async handle(event: PetEvent): Promise<void> {
     if (event.type !== 'idle' && event.type !== 'sleep') this.idleMinutes = 0
+    this.state.actionNonce += 1
     const phrases = this.corpus.phrases
     switch (event.type) {
       case 'click':
