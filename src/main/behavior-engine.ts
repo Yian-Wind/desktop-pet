@@ -1,4 +1,5 @@
 import { DEFAULT_CORPUS } from '../shared/defaults'
+import { SLEEP_EXCLUDED_ANIMATIONS } from '../shared/animation-pool'
 import type { CorpusConfig, PetEvent, PetPack, PetWindowState } from '../shared/types'
 
 function pick(arr: string[] | undefined): string | null {
@@ -21,6 +22,10 @@ export class BehaviorEngine {
   private idleMinutes = 0
   private lastIdleBubbleAt = 0
   private idleTimer?: NodeJS.Timeout
+  private sleepAnimationTimer?: NodeJS.Timeout
+  private currentPack?: PetPack
+  private lastSleepAnimationName: string | null = null
+  private sleepAnimationIntervalSeconds = 30
   private corpus: CorpusConfig = { ...DEFAULT_CORPUS, phrases: { ...DEFAULT_CORPUS.phrases } }
 
   constructor(
@@ -29,6 +34,10 @@ export class BehaviorEngine {
 
   start(pack: PetPack): void {
     if (this.idleTimer) clearInterval(this.idleTimer)
+    this.stopSleepAnimationTimer()
+    this.currentPack = pack
+    this.lastSleepAnimationName = null
+    this.state.animationName = undefined
     this.corpus = {
       ...DEFAULT_CORPUS,
       ...pack.corpus,
@@ -50,6 +59,12 @@ export class BehaviorEngine {
 
   stop(): void {
     if (this.idleTimer) clearInterval(this.idleTimer)
+    this.stopSleepAnimationTimer()
+  }
+
+  setSleepAnimationIntervalSeconds(seconds: number): void {
+    this.sleepAnimationIntervalSeconds = seconds
+    if (this.state.action === 'sleep') this.startSleepAnimationTimer()
   }
 
   getState(): PetWindowState {
@@ -58,7 +73,9 @@ export class BehaviorEngine {
 
   async handle(event: PetEvent): Promise<void> {
     if (event.type !== 'idle' && event.type !== 'sleep') this.idleMinutes = 0
+    if (event.type !== 'sleep') this.stopSleepAnimationTimer()
     this.state.actionNonce += 1
+    this.state.animationName = undefined
     const phrases = this.corpus.phrases
     switch (event.type) {
       case 'click':
@@ -76,6 +93,7 @@ export class BehaviorEngine {
         this.showBubble(pick(phrases['drag-end']) ?? '飞起来啦！')
         break
       case 'sleep':
+        if (this.state.action !== 'sleep') this.startSleepAnimationTimer()
         this.state.action = 'sleep'
         this.state.emotion = 'sleepy'
         this.showBubble(pick(phrases.sleep) ?? 'Zzz…')
@@ -112,6 +130,39 @@ export class BehaviorEngine {
     this.state.bubble = text
     this.state.bubbleVisible = true
     this.emit()
+  }
+
+  private startSleepAnimationTimer(): void {
+    this.stopSleepAnimationTimer()
+    this.sleepAnimationTimer = setInterval(() => {
+      if (this.state.action !== 'sleep') {
+        this.stopSleepAnimationTimer()
+        return
+      }
+
+      const animationName = this.pickSleepAnimation()
+      if (!animationName) return
+
+      this.state.actionNonce += 1
+      this.state.animationName = animationName
+      this.emit()
+    }, this.sleepAnimationIntervalSeconds * 1000)
+  }
+
+  private stopSleepAnimationTimer(): void {
+    if (!this.sleepAnimationTimer) return
+    clearInterval(this.sleepAnimationTimer)
+    this.sleepAnimationTimer = undefined
+  }
+
+  private pickSleepAnimation(): string | null {
+    const animations = this.currentPack?.manifest.animations ?? []
+    const choices = animations.filter((name) => !SLEEP_EXCLUDED_ANIMATIONS.has(name))
+    const nonRepeatingChoices = choices.filter((name) => name !== this.lastSleepAnimationName)
+    const pool = nonRepeatingChoices.length > 0 ? nonRepeatingChoices : choices
+    const animationName = pool[Math.floor(Math.random() * pool.length)] ?? null
+    if (animationName) this.lastSleepAnimationName = animationName
+    return animationName
   }
 
   private hideBubble(): void {

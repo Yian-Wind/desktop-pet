@@ -13,6 +13,7 @@ import {
 } from '@esotericsoftware/spine-webgl'
 import type { TextureAtlas } from '@esotericsoftware/spine-webgl'
 import type { PetPack, PetWindowState } from '../../shared/types'
+import { CLICK_EXCLUDED_ANIMATIONS } from '../../shared/animation-pool'
 import type { PetHitTest } from './PetVisual'
 
 const ACTION_ANIMATIONS: Record<string, string> = {
@@ -25,8 +26,8 @@ const ACTION_ANIMATIONS: Record<string, string> = {
 }
 
 const LOOP_ACTIONS = new Set(['sleep'])
+const LOOP_ANIMATIONS = new Set(['loop', 'loop笑'])
 const IDLE_ANIMATION = ACTION_ANIMATIONS['idle']
-const CLICK_EXCLUDED_ANIMATIONS = new Set(['eye', 'loop', 'loop笑', 'walk'])
 const FIT_MARGIN = 1.15
 const DROP_FALL_SECONDS = 0.14
 const DROP_SPRING_SECONDS = 0.32
@@ -58,6 +59,7 @@ interface SpineRuntime {
   spineCanvas: SpineCanvas
   bounds: { x: number; y: number; width: number; height: number }
   currentAction: string
+  currentAnimationName: string
   swayTime: number
   dropSpringTime: number | null
   baseRootRotation: number
@@ -83,13 +85,6 @@ function createCombinedSkin(skeleton: Skeleton): Skin | null {
   combinedSkin.addSkin(defaultSkin)
   combinedSkin.addSkin(directionSkin)
   return combinedSkin
-}
-
-function pickRandomClickAnimation(skeleton: Skeleton, animations: string[]): string {
-  const choices = animations.filter((name) => {
-    return !CLICK_EXCLUDED_ANIMATIONS.has(name) && skeleton.data.findAnimation(name) !== null
-  })
-  return choices[Math.floor(Math.random() * choices.length)] ?? ACTION_ANIMATIONS['click']
 }
 
 function applyStructuralDropSpring(runtime: SpineRuntime, delta: number): void {
@@ -153,6 +148,7 @@ function setDragExpression(skeleton: Skeleton, enabled: boolean): void {
 
 function playSurfSequence(runtime: SpineRuntime): void {
   const state = runtime.state
+  runtime.currentAnimationName = '冲浪'
 
   const exitEntry = state.setAnimation(0, '冲浪', false)
   exitEntry.animationStart = 0
@@ -180,6 +176,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const spineCanvasRef = useRef<SpineCanvas | null>(null)
   const runtimeRef = useRef<SpineRuntime | null>(null)
+  const lastClickAnimationRef = useRef<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
 
@@ -226,6 +223,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
                 !(runtime.currentAction === 'surf' && !entry.reverse)
               ) {
                 runtime.currentAction = 'idle'
+                runtime.currentAnimationName = IDLE_ANIMATION
                 animationState.setAnimation(0, IDLE_ANIMATION, false)
               }
             }
@@ -237,6 +235,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
             spineCanvas: canvas,
             bounds: skeleton.getBoundsRect(),
             currentAction: '',
+            currentAnimationName: '',
             swayTime: 0,
             dropSpringTime: null,
             baseRootRotation,
@@ -322,6 +321,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
     if (state.action === 'drag') {
       if (runtime.currentAction !== 'drag') {
         runtime.currentAction = 'drag'
+        runtime.currentAnimationName = ACTION_ANIMATIONS['drag']
         runtime.dropSpringTime = null
       }
       return
@@ -329,24 +329,41 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
     if (state.action === 'idle' && runtime.currentAction === 'drag') {
       runtime.dropSpringTime = 0
     }
-    const animationName = state.action === 'click'
-      ? pickRandomClickAnimation(runtime.skeleton, pack.manifest.animations)
-      : ACTION_ANIMATIONS[state.action] ?? IDLE_ANIMATION
+    let animationName = ACTION_ANIMATIONS[state.action] ?? IDLE_ANIMATION
+    if (state.action === 'click') {
+      const choices = pack.manifest.animations.filter((name) => {
+        return !CLICK_EXCLUDED_ANIMATIONS.has(name) && runtime.skeleton.data.findAnimation(name) !== null
+      })
+      const nonRepeatingChoices = choices.filter((name) => {
+        return name !== lastClickAnimationRef.current && name !== runtime.currentAnimationName
+      })
+      const pool = nonRepeatingChoices.length > 0 ? nonRepeatingChoices : choices
+      animationName = pool[Math.floor(Math.random() * pool.length)] ?? ACTION_ANIMATIONS['click']
+      lastClickAnimationRef.current = animationName
+    } else if (state.animationName) {
+      animationName = state.animationName
+    }
     if (!runtime.skeleton.data.findAnimation(animationName)) return
-    const loop = LOOP_ACTIONS.has(state.action)
+    const loop = state.animationName
+      ? LOOP_ANIMATIONS.has(animationName)
+      : LOOP_ACTIONS.has(state.action)
     if (animationName === '冲浪') {
       runtime.currentAction = 'surf'
       playSurfSequence(runtime)
       return
     }
     if (runtime.currentAction === state.action) {
-      if (state.action === 'click' || !loop) runtime.state.setAnimation(0, animationName, false)
+      if (state.action === 'click' || state.animationName || !loop) {
+        runtime.state.setAnimation(0, animationName, loop)
+        runtime.currentAnimationName = animationName
+      }
       return
     }
 
     runtime.currentAction = state.action
+    runtime.currentAnimationName = animationName
     runtime.state.setAnimation(0, animationName, loop)
-  }, [state.action, state.actionNonce, ready, pack.manifest.animations])
+  }, [state.action, state.actionNonce, state.animationName, ready, pack.manifest.animations])
 
   useEffect(() => {
     if (!ready) return
@@ -355,6 +372,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
       const runtime = runtimeRef.current
       if (runtime?.currentAction === 'idle') {
         runtime.state.setAnimation(0, IDLE_ANIMATION, false)
+        runtime.currentAnimationName = IDLE_ANIMATION
       }
       timeout = window.setTimeout(blink, blinkIntervalSeconds * 1000)
     }

@@ -9,7 +9,7 @@ const DEFAULT_CONFIG: AppConfig = {
   currentPackId: 'fairy',
   petPosition: { x: 100, y: 100 },
   petScales: {},
-  spine: { blinkIntervalSeconds: 4 },
+  spine: { blinkIntervalSeconds: 4, sleepAnimationIntervalSeconds: 30 },
   reminders: { enabled: true, minIntervalMinutes: 30, startHour: 9, endHour: 22 },
   autostart: false,
   behaviorMode: 'rules'
@@ -77,7 +77,10 @@ export class ConfigStore {
       spine: {
         blinkIntervalSeconds: Number.isFinite(raw.spine?.blinkIntervalSeconds)
           ? Math.min(10, Math.max(1, Number(raw.spine?.blinkIntervalSeconds)))
-          : DEFAULT_CONFIG.spine.blinkIntervalSeconds
+          : DEFAULT_CONFIG.spine.blinkIntervalSeconds,
+        sleepAnimationIntervalSeconds: Number.isFinite(raw.spine?.sleepAnimationIntervalSeconds)
+          ? Math.min(300, Math.max(5, Number(raw.spine?.sleepAnimationIntervalSeconds)))
+          : DEFAULT_CONFIG.spine.sleepAnimationIntervalSeconds
       },
       reminders: { ...DEFAULT_CONFIG.reminders, ...raw.reminders }
     }

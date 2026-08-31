@@ -57,6 +57,7 @@ export function registerIpcHandlers(
     app.setLoginItemSettings({ openAtLogin: cfg.autostart })
     setPetScale(getPetScale(cfg.currentPackId))
     const saved = config.get()
+    behavior.setSleepAnimationIntervalSeconds(saved.spine.sleepAnimationIntervalSeconds)
     sendToPet(IPC.CONFIG_CHANGED, saved)
     return saved
   })

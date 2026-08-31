@@ -60,6 +60,7 @@ export interface PetWindowState {
   packId: string
   action: string
   actionNonce: number
+  animationName?: string
   emotion: string
   bubble: string
   bubbleVisible: boolean
@@ -73,7 +74,10 @@ export interface AppConfig {
   currentPackId: string
   petPosition: { x: number; y: number }
   petScales: Record<string, number>
-  spine: { blinkIntervalSeconds: number }
+  spine: {
+    blinkIntervalSeconds: number
+    sleepAnimationIntervalSeconds: number
+  }
   reminders: {
     enabled: boolean
     minIntervalMinutes: number

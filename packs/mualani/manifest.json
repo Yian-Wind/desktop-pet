@@ -3,7 +3,7 @@
   "name": "Mualani",
   "version": "0.1.0",
   "type": "spine",
-  "animations": ["loop", "loop笑", "walk", "抬手示意", "冲浪", "拍手x", "点点头"],
+  "animations": ["loop", "loop笑", "walk", "抬手示意", "冲浪", "拍手x", "点点头", "打瞌睡"],
   "defaultScale": 0.28,
   "author": "user",
   "assetPaths": {

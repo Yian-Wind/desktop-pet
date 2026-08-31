@@ -37,6 +37,7 @@ if (!gotLock) {
     registerIpcHandlers(config, packs, llm, obsidian, skills, behavior)
 
     const startupConfig = config.get()
+    behavior.setSleepAnimationIntervalSeconds(startupConfig.spine.sleepAnimationIntervalSeconds)
     const startupPack = packs.get(startupConfig.currentPackId) ?? packs.list()[0]
     createPetWindow({
       ...startupConfig.petPosition,

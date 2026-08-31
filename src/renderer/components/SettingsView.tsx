@@ -20,6 +20,8 @@ export function SettingsView() {
   const [jsonError, setJsonError] = useState<string | null>(null)
   const [savingJson, setSavingJson] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const corpusSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingCorpusRef = useRef<{ packId: string; corpus: CorpusConfig } | null>(null)
 
   useEffect(() => {
     let disposed = false
@@ -44,6 +46,9 @@ export function SettingsView() {
       disposed = true
       unsubscribe()
       if (saveTimer.current) clearTimeout(saveTimer.current)
+      if (corpusSaveTimer.current) clearTimeout(corpusSaveTimer.current)
+      const pendingCorpus = pendingCorpusRef.current
+      if (pendingCorpus) void window.petApi.saveCorpus(pendingCorpus.packId, pendingCorpus.corpus)
     }
   }, [])
 
@@ -97,6 +102,45 @@ export function SettingsView() {
 
   function updateSpine(patch: Partial<AppConfig['spine']>) {
     update({ spine: { ...cfg.spine, ...patch } })
+  }
+
+  async function persistCorpus(packId: string, corpus: CorpusConfig) {
+    try {
+      const saved = await window.petApi.saveCorpus(packId, corpus)
+      if (!saved) throw new Error('未找到角色包')
+      setPacks((prev) => prev.map((p) => (p.manifest.id === packId ? saved : p)))
+      setCorpusJson(stringify(saved.corpus))
+      setSaveState('saved')
+    } catch {
+      setSaveState('error')
+    }
+  }
+
+  function commitCorpus(next: CorpusConfig, delayMs = 300) {
+    if (!currentPack) return
+    const packId = currentPack.manifest.id
+    setPacks((prev) => prev.map((p) => (p.manifest.id === packId ? { ...p, corpus: next } : p)))
+    setCorpusJson(stringify(next))
+    setSaveState('saving')
+    pendingCorpusRef.current = { packId, corpus: next }
+    if (corpusSaveTimer.current) clearTimeout(corpusSaveTimer.current)
+    if (delayMs === 0) {
+      pendingCorpusRef.current = null
+      void persistCorpus(packId, next)
+      return
+    }
+    corpusSaveTimer.current = setTimeout(() => {
+      pendingCorpusRef.current = null
+      void persistCorpus(packId, next)
+    }, delayMs)
+  }
+
+  function updateSleepAfterMinutes(minutes: number) {
+    if (!currentPack) return
+    commitCorpus({
+      ...currentPack.corpus,
+      sleepAfterMinutes: Math.min(60, Math.max(1, minutes))
+    })
   }
 
   function addBase() {
@@ -326,6 +370,18 @@ export function SettingsView() {
 
       <section className="settings-section">
         <h2>宠物</h2>
+        {currentPack ? (
+          <label>进入长待机（当前 {currentPack.corpus.sleepAfterMinutes} 分钟）
+            <input
+              type="range"
+              min={1}
+              max={60}
+              step={1}
+              value={currentPack.corpus.sleepAfterMinutes}
+              onChange={(e) => updateSleepAfterMinutes(Number(e.target.value))}
+            />
+          </label>
+        ) : null}
         <label>大小比例（{currentPack?.manifest.name ?? cfg.currentPackId} 当前 {currentScale}×）
           <input type="range" min={0.2} max={2} step={0.1} value={currentScale}
             onChange={(e) => updateScale(Number(e.target.value))} />
@@ -338,6 +394,16 @@ export function SettingsView() {
             step={0.5}
             value={cfg.spine.blinkIntervalSeconds}
             onChange={(e) => updateSpine({ blinkIntervalSeconds: Number(e.target.value) })}
+          />
+        </label>
+        <label>长待机动画间隔（当前 {cfg.spine.sleepAnimationIntervalSeconds} 秒）
+          <input
+            type="range"
+            min={5}
+            max={300}
+            step={5}
+            value={cfg.spine.sleepAnimationIntervalSeconds}
+            onChange={(e) => updateSpine({ sleepAnimationIntervalSeconds: Number(e.target.value) })}
           />
         </label>
       </section>
