@@ -50,10 +50,10 @@ interface SpinePetVisualProps {
 
 function createCombinedSkin(skeleton: Skeleton): Skin | null {
   const defaultSkin = skeleton.data.findSkin('default')
-  const directionSkin = skeleton.data.findSkin('right')
+  const directionSkin = skeleton.data.findSkin('left')
   if (!defaultSkin || !directionSkin) return null
 
-  const combinedSkin = new Skin('pet-right')
+  const combinedSkin = new Skin('pet-left')
   combinedSkin.addSkin(defaultSkin)
   combinedSkin.addSkin(directionSkin)
   return combinedSkin
