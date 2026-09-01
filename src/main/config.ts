@@ -12,7 +12,8 @@ const DEFAULT_CONFIG: AppConfig = {
   spine: { blinkIntervalSeconds: 4, sleepAnimationIntervalSeconds: 30 },
   reminders: { enabled: true, minIntervalMinutes: 30, startHour: 9, endHour: 22 },
   autostart: false,
-  behaviorMode: 'rules'
+  behaviorMode: 'rules',
+  bubbleDurationSeconds: 5
 }
 
 export class ConfigStore {
@@ -82,7 +83,10 @@ export class ConfigStore {
           ? Math.min(300, Math.max(5, Number(raw.spine?.sleepAnimationIntervalSeconds)))
           : DEFAULT_CONFIG.spine.sleepAnimationIntervalSeconds
       },
-      reminders: { ...DEFAULT_CONFIG.reminders, ...raw.reminders }
+      reminders: { ...DEFAULT_CONFIG.reminders, ...raw.reminders },
+      bubbleDurationSeconds: Number.isFinite(raw.bubbleDurationSeconds)
+        ? Math.min(20, Math.max(1, Number(raw.bubbleDurationSeconds)))
+        : DEFAULT_CONFIG.bubbleDurationSeconds
     }
   }
 

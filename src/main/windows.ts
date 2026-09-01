@@ -4,6 +4,10 @@ import { join } from 'node:path'
 let petWindow: BrowserWindow | null = null
 let panelWindow: BrowserWindow | null = null
 
+const PET_BASE_SIZE = 320
+const PET_UI_MARGIN_RATIO = 0.35
+const PET_WINDOW_SCALE = 1 + PET_UI_MARGIN_RATIO * 2
+
 function loadRenderer(win: BrowserWindow, windowName: string): void {
   const devUrl = process.env['ELECTRON_RENDERER_URL']
   if (devUrl) {
@@ -15,12 +19,14 @@ function loadRenderer(win: BrowserWindow, windowName: string): void {
 
 export function createPetWindow(position: { x: number; y: number; scale: number }): BrowserWindow {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
-  const size = 320 * (position.scale || 1)
+  const stageSize = PET_BASE_SIZE * (position.scale || 1)
+  const size = Math.round(stageSize * PET_WINDOW_SCALE)
+  const margin = getPetWindowMargin(size)
   const win = new BrowserWindow({
     width: size,
     height: size,
-    x: position.x || width - size - 40,
-    y: position.y || height - size - 40,
+    x: (position.x || width - stageSize - 40) - margin,
+    y: (position.y || height - stageSize - 40) - margin,
     transparent: true,
     frame: false,
     alwaysOnTop: true,
@@ -88,7 +94,7 @@ export function sendToPanel(channel: string, payload: unknown): void {
 
 export function setPetScale(scale: number): void {
   if (!petWindow || petWindow.isDestroyed()) return
-  const size = Math.round(320 * (scale || 1))
+  const size = Math.round(PET_BASE_SIZE * (scale || 1) * PET_WINDOW_SCALE)
   const bounds = petWindow.getBounds()
   const centerX = bounds.x + bounds.width / 2
   const centerY = bounds.y + bounds.height / 2
@@ -98,4 +104,26 @@ export function setPetScale(scale: number): void {
     width: size,
     height: size
   })
+}
+
+export function getPetWindowMargin(windowSize: number): number {
+  return Math.round(windowSize * (PET_UI_MARGIN_RATIO / PET_WINDOW_SCALE))
+}
+
+function getPetStageOrigin(): { x: number; y: number } {
+  if (!petWindow || petWindow.isDestroyed()) return { x: 0, y: 0 }
+  const bounds = petWindow.getBounds()
+  const margin = getPetWindowMargin(bounds.width)
+  return { x: bounds.x + margin, y: bounds.y + margin }
+}
+
+export function setPetStagePosition(x: number, y: number): void {
+  if (!petWindow || petWindow.isDestroyed()) return
+  const bounds = petWindow.getBounds()
+  const margin = getPetWindowMargin(bounds.width)
+  petWindow.setPosition(Math.round(x - margin), Math.round(y - margin))
+}
+
+export function getPetStagePosition(): { x: number; y: number } {
+  return getPetStageOrigin()
 }

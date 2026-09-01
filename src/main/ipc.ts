@@ -7,7 +7,7 @@ import { LLMClient } from './services/llm-client'
 import { ObsidianBaseService } from './services/obsidian-base'
 import { SkillBus } from './skill-bus'
 import { BehaviorEngine } from './behavior-engine'
-import { getPetWindow, openPanel, sendToPanel, sendToPet, setPetScale } from './windows'
+import { getPetStagePosition, getPetWindow, getPetWindowMargin, openPanel, sendToPanel, sendToPet, setPetScale, setPetStagePosition } from './windows'
 
 export function registerIpcHandlers(
   config: ConfigStore,
@@ -58,6 +58,7 @@ export function registerIpcHandlers(
     setPetScale(getPetScale(cfg.currentPackId))
     const saved = config.get()
     behavior.setSleepAnimationIntervalSeconds(saved.spine.sleepAnimationIntervalSeconds)
+    behavior.setBubbleDurationSeconds(saved.bubbleDurationSeconds)
     sendToPet(IPC.CONFIG_CHANGED, saved)
     return saved
   })
@@ -111,7 +112,8 @@ export function registerIpcHandlers(
     stopPetDrop()
     const win = getPetWindow()
     if (!win || win.isDestroyed()) return
-    win.setPosition(Math.round(x), Math.round(y))
+    const margin = getPetWindowMargin(win.getBounds().width)
+    setPetStagePosition(x + margin, y + margin)
   })
 
   ipcMain.handle(IPC.PET_DROP, () => {
@@ -119,9 +121,9 @@ export function registerIpcHandlers(
     const win = getPetWindow()
     if (!win || win.isDestroyed()) return
 
-    const bounds = win.getBounds()
-    const startX = bounds.x
-    const startY = bounds.y
+    const startStage = getPetStagePosition()
+    const startX = startStage.x
+    const startY = startStage.y
     const duration = dropFallDuration
     const startedAt = Date.now()
     petDropTimer = setInterval(() => {
@@ -133,7 +135,7 @@ export function registerIpcHandlers(
 
       const elapsed = Math.min(duration, Date.now() - startedAt)
       const progress = elapsed / duration
-      currentWindow.setPosition(startX, Math.round(startY + dropDistance * progress * progress))
+      setPetStagePosition(startX, startY + dropDistance * progress * progress)
       if (elapsed < duration) return
 
       stopPetDrop()

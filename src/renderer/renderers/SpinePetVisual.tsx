@@ -23,7 +23,8 @@ const ACTION_ANIMATIONS: Record<string, string> = {
   'drag-end': '冲浪',
   sleep: 'loop',
   wake: 'loop笑',
-  cheer: '举手张嘴'
+  cheer: '举手张嘴',
+  alarm: '闹钟提示'
 }
 
 const LOOP_ACTIONS = new Set(['sleep'])
@@ -320,14 +321,14 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
     if (!runtime || !ready) return
 
     if (state.action === 'drag') {
-      if (runtime.currentAction !== 'drag') {
+      if (runtime.currentAction !== 'drag' || runtime.dropSpringTime !== null) {
         runtime.state.clearTrack(0)
         runtime.skeleton.setToSetupPose()
         runtime.currentAction = 'drag'
         runtime.currentAnimationName = ACTION_ANIMATIONS['drag']
         runtime.state.setAnimation(0, ACTION_ANIMATIONS['drag'], false)
-        runtime.dropSpringTime = null
       }
+      runtime.dropSpringTime = null
       return
     }
     if (state.action === 'idle' && runtime.currentAction === 'drag') {
@@ -355,6 +356,10 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
       runtime.currentAction = 'surf'
       playSurfSequence(runtime)
       return
+    }
+    if (state.action === 'click') {
+      runtime.state.clearTrack(0)
+      runtime.skeleton.setToSetupPose()
     }
     if (runtime.currentAction === state.action) {
       if (state.action === 'click' || state.animationName || !loop) {

@@ -104,6 +104,10 @@ export function SettingsView() {
     update({ spine: { ...cfg.spine, ...patch } })
   }
 
+  function updateBubbleDuration(seconds: number) {
+    update({ bubbleDurationSeconds: Math.min(20, Math.max(1, seconds)) })
+  }
+
   async function persistCorpus(packId: string, corpus: CorpusConfig) {
     try {
       const saved = await window.petApi.saveCorpus(packId, corpus)
@@ -411,6 +415,16 @@ export function SettingsView() {
             测试举手张嘴表情
           </button>
         ) : null}
+        <label>气泡显示时长（当前 {cfg.bubbleDurationSeconds} 秒）
+          <input
+            type="range"
+            min={1}
+            max={20}
+            step={1}
+            value={cfg.bubbleDurationSeconds}
+            onChange={(e) => updateBubbleDuration(Number(e.target.value))}
+          />
+        </label>
       </section>
 
       <section className="settings-section">

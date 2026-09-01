@@ -38,6 +38,7 @@ if (!gotLock) {
 
     const startupConfig = config.get()
     behavior.setSleepAnimationIntervalSeconds(startupConfig.spine.sleepAnimationIntervalSeconds)
+    behavior.setBubbleDurationSeconds(startupConfig.bubbleDurationSeconds)
     const startupPack = packs.get(startupConfig.currentPackId) ?? packs.list()[0]
     createPetWindow({
       ...startupConfig.petPosition,

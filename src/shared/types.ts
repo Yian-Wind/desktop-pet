@@ -86,6 +86,7 @@ export interface AppConfig {
   }
   autostart: boolean
   behaviorMode: BehaviorMode
+  bubbleDurationSeconds: number
 }
 
 export interface ChatMessage {
@@ -105,7 +106,7 @@ export interface TodoItem {
 }
 
 export interface PetEvent {
-  type: 'click' | 'drag-start' | 'drag-end' | 'idle' | 'sleep' | 'wake' | 'chat-open' | 'chat-close' | 'cheer'
+  type: 'click' | 'drag-start' | 'drag-end' | 'idle' | 'sleep' | 'wake' | 'chat-open' | 'chat-close' | 'cheer' | 'alarm'
   payload?: Record<string, unknown>
 }
 

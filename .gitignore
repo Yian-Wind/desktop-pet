@@ -7,6 +7,7 @@ release/
 # 编辑器 / 系统文件
 .vscode/
 .idea/
+.obsidian/
 .DS_Store
 Thumbs.db
 

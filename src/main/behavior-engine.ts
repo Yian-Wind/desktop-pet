@@ -26,6 +26,8 @@ export class BehaviorEngine {
   private currentPack?: PetPack
   private lastSleepAnimationName: string | null = null
   private sleepAnimationIntervalSeconds = 30
+  private bubbleDurationSeconds = 5
+  private bubbleTimer?: NodeJS.Timeout
   private corpus: CorpusConfig = { ...DEFAULT_CORPUS, phrases: { ...DEFAULT_CORPUS.phrases } }
 
   constructor(
@@ -67,6 +69,11 @@ export class BehaviorEngine {
     if (this.state.action === 'sleep') this.startSleepAnimationTimer()
   }
 
+  setBubbleDurationSeconds(seconds: number): void {
+    this.bubbleDurationSeconds = seconds
+    if (this.state.bubbleVisible) this.scheduleBubbleHide()
+  }
+
   getState(): PetWindowState {
     return { ...this.state }
   }
@@ -101,7 +108,12 @@ export class BehaviorEngine {
       case 'cheer':
         this.state.action = 'cheer'
         this.state.emotion = 'excited'
-        this.showBubble('今日待办推荐！')
+        this.showBubble(typeof event.payload?.text === 'string' ? event.payload.text : '今日待办推荐！')
+        break
+      case 'alarm':
+        this.state.action = 'alarm'
+        this.state.emotion = 'neutral'
+        this.showBubble(typeof event.payload?.text === 'string' ? event.payload.text : '闹钟已设置')
         break
       case 'idle': {
         this.state.action = 'idle'
@@ -135,6 +147,15 @@ export class BehaviorEngine {
     this.state.bubble = text
     this.state.bubbleVisible = true
     this.emit()
+    this.scheduleBubbleHide()
+  }
+
+  private scheduleBubbleHide(): void {
+    if (this.bubbleTimer) clearTimeout(this.bubbleTimer)
+    this.bubbleTimer = setTimeout(() => {
+      this.hideBubble()
+      this.bubbleTimer = undefined
+    }, this.bubbleDurationSeconds * 1000)
   }
 
   private startSleepAnimationTimer(): void {
