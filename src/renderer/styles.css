@@ -32,8 +32,8 @@ body.pet-mode, .pet-root {
 
 .pet-root {
   --bubble-reserve: 88px;
-  --pet-stage-inset: 25%;
-  --pet-stage-size: calc(100vmin * 0.5);
+  --pet-stage-inset: 26.85%;
+  --pet-stage-size: calc(100vmin * 0.463);
   --pet-center-x: calc(var(--pet-stage-inset) + var(--pet-stage-size) * 0.5);
   --pet-center-y: calc(var(--pet-stage-inset) + var(--pet-stage-size) * 0.31);
   --quick-action-radius: calc(var(--pet-stage-size) * 0.34);
