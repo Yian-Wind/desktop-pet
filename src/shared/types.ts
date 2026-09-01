@@ -105,7 +105,7 @@ export interface TodoItem {
 }
 
 export interface PetEvent {
-  type: 'click' | 'drag-start' | 'drag-end' | 'idle' | 'sleep' | 'wake' | 'chat-open' | 'chat-close'
+  type: 'click' | 'drag-start' | 'drag-end' | 'idle' | 'sleep' | 'wake' | 'chat-open' | 'chat-close' | 'cheer'
   payload?: Record<string, unknown>
 }
 

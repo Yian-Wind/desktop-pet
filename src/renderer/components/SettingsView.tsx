@@ -406,6 +406,11 @@ export function SettingsView() {
             onChange={(e) => updateSpine({ sleepAnimationIntervalSeconds: Number(e.target.value) })}
           />
         </label>
+        {currentPack?.manifest.type === 'spine' && currentPack.manifest.animations.includes('举手张嘴') ? (
+          <button className="secondary-button" onClick={() => void window.petApi.sendPetEvent({ type: 'cheer' })}>
+            测试举手张嘴表情
+          </button>
+        ) : null}
       </section>
 
       <section className="settings-section">

@@ -98,6 +98,11 @@ export class BehaviorEngine {
         this.state.emotion = 'sleepy'
         this.showBubble(pick(phrases.sleep) ?? 'Zzz…')
         break
+      case 'cheer':
+        this.state.action = 'cheer'
+        this.state.emotion = 'excited'
+        this.showBubble('今日待办推荐！')
+        break
       case 'idle': {
         this.state.action = 'idle'
         this.state.emotion = 'neutral'

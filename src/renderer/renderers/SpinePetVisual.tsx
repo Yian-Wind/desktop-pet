@@ -22,7 +22,8 @@ const ACTION_ANIMATIONS: Record<string, string> = {
   drag: 'eye',
   'drag-end': '冲浪',
   sleep: 'loop',
-  wake: 'loop笑'
+  wake: 'loop笑',
+  cheer: '举手张嘴'
 }
 
 const LOOP_ACTIONS = new Set(['sleep'])
@@ -320,8 +321,11 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
 
     if (state.action === 'drag') {
       if (runtime.currentAction !== 'drag') {
+        runtime.state.clearTrack(0)
+        runtime.skeleton.setToSetupPose()
         runtime.currentAction = 'drag'
         runtime.currentAnimationName = ACTION_ANIMATIONS['drag']
+        runtime.state.setAnimation(0, ACTION_ANIMATIONS['drag'], false)
         runtime.dropSpringTime = null
       }
       return
