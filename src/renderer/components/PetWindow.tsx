@@ -164,13 +164,8 @@ export function PetWindow() {
   }
 
   async function recommendTodayTodo() {
-    const todos = await window.petApi.getTodos()
-    const incomplete = todos.filter((todo) => !todo.completed)
-    const todayKey = new Date().toISOString().slice(0, 10)
-    const dueToday = incomplete.filter((todo) => todo.dueDate?.startsWith(todayKey))
-    const recommended = dueToday[0] ?? incomplete[0]
-    const text = recommended ? `今日优先：${recommended.title}` : '今天没有待办'
-    await window.petApi.sendPetEvent({ type: 'cheer', payload: { text } })
+    const result = await window.petApi.recommendTodo()
+    await window.petApi.sendPetEvent({ type: 'cheer', payload: { text: result.text } })
   }
 
   function scheduleAlarm(): void {

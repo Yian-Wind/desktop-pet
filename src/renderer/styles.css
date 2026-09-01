@@ -32,8 +32,8 @@ body.pet-mode, .pet-root {
 
 .pet-root {
   --bubble-reserve: 88px;
-  --pet-stage-inset: 20.588%;
-  --pet-stage-size: calc(100vmin * 0.588235);
+  --pet-stage-inset: 25%;
+  --pet-stage-size: calc(100vmin * 0.5);
   --pet-center-x: calc(var(--pet-stage-inset) + var(--pet-stage-size) * 0.5);
   --pet-center-y: calc(var(--pet-stage-inset) + var(--pet-stage-size) * 0.31);
   --quick-action-radius: calc(var(--pet-stage-size) * 0.34);
@@ -78,6 +78,7 @@ body.pet-mode, .pet-root {
   padding: 8px 12px;
   font-size: 13px;
   line-height: 1.4;
+  white-space: pre-line;
   box-shadow: 0 6px 18px rgba(31, 36, 48, 0.16);
   animation: pop 0.2s ease;
   pointer-events: none;
@@ -386,7 +387,7 @@ body.pet-mode, .pet-root {
 }
 
 .todo-form input, .todo-form textarea,
-.settings-section input, .settings-section select {
+.settings-section input, .settings-section select, .settings-section textarea {
   width: 100%;
   padding: 9px 11px;
   border: 1px solid var(--line);
@@ -396,7 +397,7 @@ body.pet-mode, .pet-root {
   background: #fff;
 }
 .todo-form input:focus, .todo-form textarea:focus,
-.settings-section input:focus, .settings-section select:focus {
+.settings-section input:focus, .settings-section select:focus, .settings-section textarea:focus {
   outline: 2px solid var(--accent-soft);
 }
 
@@ -514,6 +515,27 @@ body.pet-mode, .pet-root {
 .phrase-row { display: flex; gap: 8px; align-items: center; }
 .phrase-row input { flex: 1; }
 .phrase-row .icon-button { flex: none; width: 30px; height: 30px; }
+
+.base-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.base-homework-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.base-homework-toggle input {
+  width: auto;
+  margin: 0;
+}
 .phrase-add { align-self: flex-start; padding: 6px 10px; }
 
 .test-result {

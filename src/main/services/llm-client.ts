@@ -2,7 +2,7 @@ import type { ApiConfig, ChatMessage } from '../../shared/types'
 import { ProxyAgent } from 'undici'
 
 export class LLMClient {
-  async chat(messages: ChatMessage[], config: ApiConfig): Promise<string> {
+  async chat(messages: ChatMessage[], config: ApiConfig, maxTokens?: number): Promise<string> {
     if (!config.baseUrl || !config.apiKey || !config.model) {
       throw new Error('API 未配置')
     }
@@ -20,7 +20,8 @@ export class LLMClient {
         },
         body: JSON.stringify({
           model: config.model,
-          messages: messages.map((m) => ({ role: m.role, content: m.content }))
+          messages: messages.map((m) => ({ role: m.role, content: m.content })),
+          ...(maxTokens ? { max_tokens: maxTokens } : {})
         }),
         dispatcher,
         signal: AbortSignal.timeout(30000)

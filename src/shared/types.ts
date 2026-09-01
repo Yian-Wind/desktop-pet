@@ -87,6 +87,10 @@ export interface AppConfig {
   autostart: boolean
   behaviorMode: BehaviorMode
   bubbleDurationSeconds: number
+  todo: {
+    filterPrompt: string
+    homeworkBaseFiles: string[]
+  }
 }
 
 export interface ChatMessage {
@@ -102,6 +106,9 @@ export interface TodoItem {
   completed: boolean
   priority: string
   dueDate: string
+  tags: string[]
+  remainingDays?: number | null
+  baseFile?: string
   baseName?: string
 }
 

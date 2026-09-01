@@ -17,6 +17,7 @@ export const IPC = {
   CHAT_SEND: 'chat:send',
   CHAT_TEST: 'chat:test',
   CHAT_GET_HISTORY: 'chat:get-history',
+  TODO_RECOMMEND: 'todo:recommend',
   OBSIDIAN_GET_TODOS: 'obsidian:get-todos',
   OBSIDIAN_ADD_TODO: 'obsidian:add-todo',
   OBSIDIAN_COMPLETE_TODO: 'obsidian:complete-todo',

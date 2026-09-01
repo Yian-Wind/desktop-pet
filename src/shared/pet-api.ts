@@ -19,7 +19,7 @@ export interface PetApi {
   openPackDir: (packId: string) => Promise<string>
   getPetState: () => Promise<PetWindowState>
   sendPetEvent: (event: PetEvent) => Promise<void>
-  movePet: (x: number, y: number) => Promise<void>
+  movePet: (x: number, y: number) => void
   dropPet: () => Promise<void>
   setPetSize: (scale: number, packId?: string) => Promise<void>
   setPetClickThrough: (ignore: boolean) => Promise<void>
@@ -30,6 +30,7 @@ export interface PetApi {
   sendChat: (text: string) => Promise<ChatMessage | { error: string }>
   testChat: () => Promise<{ ok: boolean; reply?: string; error?: string }>
   getChatHistory: () => Promise<ChatMessage[]>
+  recommendTodo: () => Promise<{ text: string; error?: string }>
   getTodos: () => Promise<TodoItem[]>
   addTodo: (title: string, content: string) => Promise<TodoItem>
   completeTodo: (filePath: string, completed: boolean) => Promise<boolean>

@@ -5,6 +5,7 @@ import { ConfigStore } from './config'
 import { PetPackManager } from './services/pet-pack-manager'
 import { LLMClient } from './services/llm-client'
 import { ObsidianBaseService } from './services/obsidian-base'
+import { buildChatTodoContext, buildTodoRecommendationMessages, ensureTodoReplyPrefix, fallbackTodoRecommendation, parseTodoRecommendationReply } from './services/todo-intelligence'
 import { SkillBus } from './skill-bus'
 import { BehaviorEngine } from './behavior-engine'
 import { getPetStagePosition, getPetWindow, getPetWindowMargin, openPanel, sendToPanel, sendToPet, setPetScale, setPetStagePosition } from './windows'
@@ -108,7 +109,7 @@ export function registerIpcHandlers(
     return behavior.handle(petEvent)
   })
 
-  ipcMain.handle(IPC.PET_MOVE, (_event, x: number, y: number) => {
+  ipcMain.on(IPC.PET_MOVE, (_event, x: number, y: number) => {
     stopPetDrop()
     const win = getPetWindow()
     if (!win || win.isDestroyed()) return
@@ -185,13 +186,19 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC.CHAT_SEND, async (_event, text: string) => {
     const cfg = config.get()
     const pack = packs.get(cfg.currentPackId)
-    const systemPrompt = pack ? buildPersonaPrompt(pack.persona) : ''
+    const personaPrompt = pack?.persona.systemPrompt?.trim() || (pack ? `你叫${pack.manifest.name}，是一个桌面宠物助手。` : '你是一个桌面宠物助手。')
     const userMessage: ChatMessage = { role: 'user', content: text, timestamp: Date.now() }
     const history = getChatHistory(cfg.currentPackId)
-    const messages: ChatMessage[] = [...history.slice(-20), userMessage]
-    if (systemPrompt) {
-      messages.unshift({ role: 'system', content: systemPrompt, timestamp: Date.now() })
-    }
+    const todos = cfg.obsidian.baseFiles.length > 0
+      ? await obsidian.getTodos(cfg.obsidian.vaultPath, cfg.obsidian.baseFiles)
+      : []
+    const todoContext = buildChatTodoContext(text, history, todos, cfg)
+    const systemContent = todoContext ? `${personaPrompt}\n\n${todoContext}` : personaPrompt
+    const messages: ChatMessage[] = [
+      { role: 'system', content: systemContent, timestamp: Date.now() },
+      ...history.slice(-6),
+      userMessage
+    ]
     const result = await skills.execute('chat', { messages }, {
       config: cfg,
       llm,
@@ -211,13 +218,13 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC.CHAT_TEST, async () => {
     const cfg = config.get()
     const pack = packs.get(cfg.currentPackId)
-    const system = pack ? buildPersonaPrompt(pack.persona) : ''
+    const system = pack?.persona.systemPrompt?.trim() || ''
     const fallback = pack ? `你叫${pack.manifest.name}，是一个桌面宠物助手。` : '你是一个桌面宠物助手。'
     const messages: ChatMessage[] = [
       { role: 'system', content: system || fallback, timestamp: Date.now() },
       { role: 'user', content: '请用你的角色身份做一次自我介绍，并说明你此刻的状态。', timestamp: Date.now() }
     ]
-    const result = await skills.execute('chat', { messages }, {
+    const result = await skills.execute('chat', { messages, maxTokens: 300 }, {
       config: cfg,
       llm,
       obsidian,
@@ -228,6 +235,29 @@ export function registerIpcHandlers(
       return { ok: true, reply: result.data }
     }
     return { ok: false, error: result.error ?? '扮演测试失败' }
+  })
+
+  ipcMain.handle(IPC.TODO_RECOMMEND, async () => {
+    const cfg = config.get()
+    if (cfg.obsidian.baseFiles.length === 0) {
+      return { text: '请先配置待办 Base' }
+    }
+    const todos = await obsidian.getTodos(cfg.obsidian.vaultPath, cfg.obsidian.baseFiles)
+    const pack = packs.get(cfg.currentPackId)
+    const fallbackText = fallbackTodoRecommendation(todos, cfg, pack?.persona)
+    if (!cfg.api.baseUrl || !cfg.api.apiKey || !cfg.api.model) {
+      return { text: fallbackText, error: 'API 未配置，使用本地筛选' }
+    }
+
+    try {
+      const messages = buildTodoRecommendationMessages(todos, pack?.persona, cfg)
+      const reply = await llm.chat(messages, cfg.api, 1200)
+      const parsed = parseTodoRecommendationReply(reply)
+      const shortReply = parsed?.reply || reply.slice(0, 80)
+      return { text: shortReply ? ensureTodoReplyPrefix(shortReply, pack?.persona) : fallbackText }
+    } catch (error) {
+      return { text: fallbackText, error: error instanceof Error ? error.message : String(error) }
+    }
   })
 
   ipcMain.handle(IPC.OBSIDIAN_GET_TODOS, async () => {

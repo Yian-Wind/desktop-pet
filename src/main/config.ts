@@ -13,7 +13,11 @@ const DEFAULT_CONFIG: AppConfig = {
   reminders: { enabled: true, minIntervalMinutes: 30, startHour: 9, endHour: 22 },
   autostart: false,
   behaviorMode: 'rules',
-  bubbleDurationSeconds: 5
+  bubbleDurationSeconds: 5,
+  todo: {
+    filterPrompt: '优先3天内或已逾期的作业；其次#快速；再#长期。默认排除#等待和#备忘。',
+    homeworkBaseFiles: []
+  }
 }
 
 export class ConfigStore {
@@ -86,7 +90,42 @@ export class ConfigStore {
       reminders: { ...DEFAULT_CONFIG.reminders, ...raw.reminders },
       bubbleDurationSeconds: Number.isFinite(raw.bubbleDurationSeconds)
         ? Math.min(20, Math.max(1, Number(raw.bubbleDurationSeconds)))
-        : DEFAULT_CONFIG.bubbleDurationSeconds
+        : DEFAULT_CONFIG.bubbleDurationSeconds,
+      todo: this.mergeTodoConfig(raw.todo, baseFiles)
+    }
+  }
+
+  private mergeTodoConfig(
+    raw: unknown,
+    baseFiles: string[]
+  ): AppConfig['todo'] {
+    const source = (raw ?? {}) as {
+      filterPrompt?: unknown
+      homeworkBaseFiles?: unknown
+      homeworkBaseNames?: unknown
+    }
+    const filterPrompt = typeof source.filterPrompt === 'string'
+      ? source.filterPrompt.trim().slice(0, 1000)
+      : DEFAULT_CONFIG.todo.filterPrompt
+
+    if (Array.isArray(source.homeworkBaseFiles)) {
+      return {
+        filterPrompt,
+        homeworkBaseFiles: source.homeworkBaseFiles
+          .filter((path): path is string => typeof path === 'string' && path.trim().length > 0)
+          .map((path) => path.trim())
+          .slice(0, 20)
+      }
+    }
+
+    const legacyNames = Array.isArray(source.homeworkBaseNames)
+      ? source.homeworkBaseNames.filter((name): name is string => typeof name === 'string' && name.trim().length > 0)
+      : []
+    return {
+      filterPrompt,
+      homeworkBaseFiles: baseFiles
+        .filter((path) => legacyNames.some((name) => path.includes(name)))
+        .slice(0, 20)
     }
   }
 

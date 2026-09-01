@@ -108,6 +108,30 @@ export function SettingsView() {
     update({ bubbleDurationSeconds: Math.min(20, Math.max(1, seconds)) })
   }
 
+  function updateTodo(patch: Partial<AppConfig['todo']>) {
+    update({ todo: { ...cfg.todo, ...patch } })
+  }
+
+  function normalizeBasePath(path: string): string {
+    return path.trim().replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+  }
+
+  function isHomeworkBase(path: string): boolean {
+    const normalized = normalizeBasePath(path)
+    if (!normalized) return false
+    return cfg.todo.homeworkBaseFiles.some((file) => normalizeBasePath(file) === normalized)
+  }
+
+  function toggleHomeworkBase(path: string): void {
+    const normalized = normalizeBasePath(path)
+    if (!normalized) return
+    const current = cfg.todo.homeworkBaseFiles.map(normalizeBasePath)
+    const homeworkBaseFiles = current.includes(normalized)
+      ? current.filter((file) => file !== normalized)
+      : [...current, normalized]
+    update({ todo: { ...cfg.todo, homeworkBaseFiles } })
+  }
+
   async function persistCorpus(packId: string, corpus: CorpusConfig) {
     try {
       const saved = await window.petApi.saveCorpus(packId, corpus)
@@ -347,6 +371,14 @@ export function SettingsView() {
         <label>代理地址
           <input value={cfg.api.proxy.url} onChange={(e) => updateProxy({ url: e.target.value })} placeholder="http://127.0.0.1:7897" />
         </label>
+        <label>待办筛选 Prompt
+          <textarea
+            rows={4}
+            value={cfg.todo.filterPrompt}
+            onChange={(e) => updateTodo({ filterPrompt: e.target.value })}
+            placeholder="优先3天内或已逾期的作业；其次#快速；再#长期。"
+          />
+        </label>
         <div className="settings-row">
           <button className="secondary-button" onClick={() => void runTest()} disabled={testing}>
             <FlaskConical size={15} /> {testing ? '测试中…' : '测试扮演'}
@@ -363,8 +395,17 @@ export function SettingsView() {
         <div className="phrase-group">
           <label className="phrase-label">Base 文件（可多条）</label>
           {cfg.obsidian.baseFiles.map((path, index) => (
-            <div className="phrase-row" key={index}>
+            <div className="phrase-row base-row" key={index}>
               <input value={path} onChange={(e) => updateBase(index, e.target.value)} placeholder="D:/.../视图.base" />
+              <label className="base-homework-toggle" title="将此 Base 标记为作业库">
+                <input
+                  type="checkbox"
+                  checked={isHomeworkBase(path)}
+                  disabled={!path.trim()}
+                  onChange={() => toggleHomeworkBase(path)}
+                />
+                作业
+              </label>
               <button className="icon-button" onClick={() => removeBase(index)} title="删除">×</button>
             </div>
           ))}
@@ -410,11 +451,6 @@ export function SettingsView() {
             onChange={(e) => updateSpine({ sleepAnimationIntervalSeconds: Number(e.target.value) })}
           />
         </label>
-        {currentPack?.manifest.type === 'spine' && currentPack.manifest.animations.includes('举手张嘴') ? (
-          <button className="secondary-button" onClick={() => void window.petApi.sendPetEvent({ type: 'cheer' })}>
-            测试举手张嘴表情
-          </button>
-        ) : null}
         <label>气泡显示时长（当前 {cfg.bubbleDurationSeconds} 秒）
           <input
             type="range"

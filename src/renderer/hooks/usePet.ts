@@ -12,8 +12,6 @@ export function usePet() {
   const draggingRef = useRef(false)
   const movedRef = useRef(false)
   const pointerStartRef = useRef({ screenX: 0, screenY: 0, windowX: 0, windowY: 0 })
-  const pendingMoveRef = useRef<{ x: number; y: number } | null>(null)
-  const moveFrameRef = useRef<number | null>(null)
 
   useEffect(() => {
     let disposed = false
@@ -43,7 +41,6 @@ export function usePet() {
     })
     return () => {
       disposed = true
-      flushPendingMove()
       unsubscribe()
       unsubscribeConfig()
     }
@@ -53,17 +50,6 @@ export function usePet() {
 
   function sendEvent(event: PetEvent) {
     void window.petApi.sendPetEvent(event)
-  }
-
-  function flushPendingMove() {
-    if (moveFrameRef.current !== null) {
-      cancelAnimationFrame(moveFrameRef.current)
-      moveFrameRef.current = null
-    }
-    const move = pendingMoveRef.current
-    if (!move) return
-    pendingMoveRef.current = null
-    void window.petApi.movePet(move.x, move.y)
   }
 
   function onPointerDown(event: React.PointerEvent) {
@@ -91,23 +77,16 @@ export function usePet() {
       movedRef.current = true
       sendEvent({ type: 'drag-start' })
     }
-    pendingMoveRef.current = {
-      x: start.windowX + event.screenX - start.screenX,
-      y: start.windowY + event.screenY - start.screenY
-    }
-    if (moveFrameRef.current === null) {
-      moveFrameRef.current = requestAnimationFrame(() => {
-        moveFrameRef.current = null
-        flushPendingMove()
-      })
-    }
+    window.petApi.movePet(
+      start.windowX + event.screenX - start.screenX,
+      start.windowY + event.screenY - start.screenY
+    )
   }
 
   function onPointerUp(_event: React.PointerEvent) {
     pointerDownRef.current = false
     if (!draggingRef.current) return
     draggingRef.current = false
-    flushPendingMove()
     void window.petApi.dropPet()
     sendEvent({ type: 'drag-end' })
   }

@@ -5,7 +5,7 @@ let petWindow: BrowserWindow | null = null
 let panelWindow: BrowserWindow | null = null
 
 const PET_BASE_SIZE = 320
-const PET_UI_MARGIN_RATIO = 0.35
+const PET_UI_MARGIN_RATIO = 0.5
 const PET_WINDOW_SCALE = 1 + PET_UI_MARGIN_RATIO * 2
 
 function loadRenderer(win: BrowserWindow, windowName: string): void {
