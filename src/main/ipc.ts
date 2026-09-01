@@ -5,7 +5,7 @@ import { ConfigStore } from './config'
 import { PetPackManager } from './services/pet-pack-manager'
 import { LLMClient } from './services/llm-client'
 import { ObsidianBaseService } from './services/obsidian-base'
-import { buildChatTodoContext, buildTodoRecommendationMessages, ensureTodoReplyPrefix, fallbackTodoRecommendation, parseTodoRecommendationReply } from './services/todo-intelligence'
+import { buildChatTodoContext, buildTodoRecommendationMessages, ensureTodoReplyPrefix, fallbackMemoRecommendation, fallbackTodoRecommendation, parseTodoRecommendationReply } from './services/todo-intelligence'
 import { SkillBus } from './skill-bus'
 import { BehaviorEngine } from './behavior-engine'
 import { getPetStagePosition, getPetWindow, getPetWindowMargin, openPanel, sendToPanel, sendToPet, setPetScale, setPetStagePosition } from './windows'
@@ -162,7 +162,7 @@ export function registerIpcHandlers(
     const packList = packs.list()
     const template = [
       { label: '打开面板', click: () => openPanel() },
-      { label: '设置', click: () => openPanel() },
+      { label: '设置', click: () => openPanel('settings') },
       { type: 'separator' as const },
       ...packList.map((pack) => ({
         label: pack.manifest.name,
@@ -260,13 +260,16 @@ export function registerIpcHandlers(
     return { ok: false, error: result.error ?? '扮演测试失败' }
   })
 
-  ipcMain.handle(IPC.TODO_RECOMMEND, async () => {
+  ipcMain.handle(IPC.TODO_RECOMMEND, async (_event, category?: 'default' | 'memo') => {
     const cfg = config.get()
     if (cfg.obsidian.baseFiles.length === 0) {
       return { text: '请先配置待办 Base' }
     }
     const todos = await obsidian.getTodos(cfg.obsidian.vaultPath, cfg.obsidian.baseFiles)
     const pack = packs.get(cfg.currentPackId)
+    if (category === 'memo') {
+      return { text: fallbackMemoRecommendation(todos, pack?.persona) }
+    }
     const fallbackText = fallbackTodoRecommendation(todos, cfg, pack?.persona)
     if (!cfg.api.baseUrl || !cfg.api.apiKey || !cfg.api.model) {
       return { text: fallbackText, error: 'API 未配置，使用本地筛选' }

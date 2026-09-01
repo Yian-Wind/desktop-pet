@@ -107,6 +107,7 @@ export interface TodoItem {
   priority: string
   dueDate: string
   tags: string[]
+  complexity: string
   remainingDays?: number | null
   baseFile?: string
   baseName?: string

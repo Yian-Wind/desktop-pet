@@ -40,6 +40,11 @@ const api: PetApi = {
     ipcRenderer.on('pack:changed', listener)
     return () => ipcRenderer.removeListener('pack:changed', listener)
   },
+  onPanelTabChanged: (callback: (tab: string) => void): (() => void) => {
+    const listener = (_event: unknown, tab: string) => callback(tab)
+    ipcRenderer.on(IPC.PANEL_TAB_CHANGED, listener)
+    return () => ipcRenderer.removeListener(IPC.PANEL_TAB_CHANGED, listener)
+  },
   onConfigChanged: (callback: (config: AppConfig) => void): (() => void) => {
     const listener = (_event: unknown, config: AppConfig) => callback(config)
     ipcRenderer.on(IPC.CONFIG_CHANGED, listener)
@@ -48,7 +53,8 @@ const api: PetApi = {
   sendChat: (text: string): Promise<ChatMessage | { error: string }> => ipcRenderer.invoke(IPC.CHAT_SEND, text),
   testChat: (): Promise<{ ok: boolean; reply?: string; error?: string }> => ipcRenderer.invoke(IPC.CHAT_TEST),
   getChatHistory: (): Promise<ChatMessage[]> => ipcRenderer.invoke(IPC.CHAT_GET_HISTORY),
-  recommendTodo: (): Promise<{ text: string; error?: string }> => ipcRenderer.invoke(IPC.TODO_RECOMMEND),
+  recommendTodo: (category?: 'default' | 'memo'): Promise<{ text: string; error?: string }> =>
+    ipcRenderer.invoke(IPC.TODO_RECOMMEND, category),
   getTodos: (): Promise<TodoItem[]> => ipcRenderer.invoke(IPC.OBSIDIAN_GET_TODOS),
   addTodo: (title: string, content: string): Promise<TodoItem> => ipcRenderer.invoke(IPC.OBSIDIAN_ADD_TODO, title, content),
   completeTodo: (filePath: string, completed: boolean): Promise<boolean> => ipcRenderer.invoke(IPC.OBSIDIAN_COMPLETE_TODO, filePath, completed),

@@ -14,7 +14,10 @@ const tabs: Array<{ id: Tab; label: string; icon: typeof MessageCircle }> = [
 ]
 
 export function Panel() {
-  const [tab, setTab] = useState<Tab>('chat')
+  const [tab, setTab] = useState<Tab>(() => {
+    const requested = new URLSearchParams(window.location.search).get('tab')
+    return requested === 'todos' || requested === 'settings' ? requested : 'chat'
+  })
   const [pack, setPack] = useState<PetPack | null>(null)
 
   useEffect(() => {
@@ -27,9 +30,13 @@ export function Panel() {
     }
     void init()
     const unsubscribe = window.petApi.onPackChanged((next) => setPack(next))
+    const unsubscribeTab = window.petApi.onPanelTabChanged((next) => {
+      if (next === 'chat' || next === 'todos' || next === 'settings') setTab(next)
+    })
     return () => {
       disposed = true
       unsubscribe()
+      unsubscribeTab()
     }
   }, [])
 

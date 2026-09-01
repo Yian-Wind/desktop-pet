@@ -82,6 +82,7 @@ export class ObsidianBaseService {
         priority: String(parsed.data['紧急程度'] ?? '').trim(),
         dueDate,
         tags: this.parseTags(parsed.data.tags ?? parsed.data.tag, parsed.content),
+        complexity: this.parseComplexity(parsed.data['复杂程度']),
         remainingDays: this.calculateRemainingDays(dueDate),
         baseFile,
         baseName
@@ -128,6 +129,11 @@ export class ObsidianBaseService {
       .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`))
       .map((tag) => tag.toLowerCase())
       .filter((tag, index, tags) => tags.indexOf(tag) === index)
+  }
+
+  private parseComplexity(value: unknown): string {
+    if (Array.isArray(value)) return value.map(String).join('、').trim()
+    return typeof value === 'string' ? value.trim() : ''
   }
 
   private calculateRemainingDays(value: string): number | null {

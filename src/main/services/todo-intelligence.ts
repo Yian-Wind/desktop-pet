@@ -8,6 +8,7 @@ interface CompactTodo {
   due: string
   remainingDays: number | null
   priority: string
+  complexity: string
   homework: boolean
   excerpt: string
 }
@@ -89,7 +90,7 @@ export function fallbackTodoRecommendation(
 ): string {
   const incomplete = todos.filter((todo) => !todo.completed)
   const homework = sortByRemainingDays(incomplete.filter((todo) => {
-    return isHomeworkTodo(todo, config) && todo.remainingDays != null && todo.remainingDays <= 3
+    return isHomeworkTodo(todo, config)
   })).slice(0, 3)
   const quick = sortByRemainingDays(incomplete.filter((todo) => {
     return !isHomeworkTodo(todo, config) && hasTag(todo, '#快速')
@@ -110,6 +111,22 @@ export function fallbackTodoRecommendation(
     return `主人，待办整理好了。\n${sections.join('\n')}`
   }
   return `今日待办整理：\n${sections.join('\n')}`
+}
+
+export function fallbackMemoRecommendation(
+  todos: TodoItem[],
+  persona: PersonaConfig | undefined
+): string {
+  const memos = sortByRemainingDays(todos.filter((todo) => {
+    return !todo.completed && hasTag(todo, '#备忘')
+  })).slice(0, 5)
+  if (persona?.name?.includes('玛拉妮')) {
+    return `🌊备忘清单来啦！\n${formatTodoSection('备忘', memos)}`
+  }
+  if (persona?.name?.toLowerCase().includes('fairy')) {
+    return `主人，备忘整理好了。\n${formatTodoSection('备忘', memos)}`
+  }
+  return `备忘提醒：\n${formatTodoSection('备忘', memos)}`
 }
 
 function buildPersonaPrompt(persona: PersonaConfig | undefined): string {
@@ -169,6 +186,7 @@ function compactTodos(todos: TodoItem[], config: AppConfig): CompactTodo[] {
     due: todo.dueDate,
     remainingDays: todo.remainingDays ?? null,
     priority: todo.priority,
+    complexity: todo.complexity,
     homework: isHomeworkTodo(todo, config),
     excerpt: normalizeExcerpt(todo.content)
   }))
@@ -178,8 +196,16 @@ function sortByRemainingDays(todos: TodoItem[]): TodoItem[] {
   return [...todos].sort((left, right) => {
     const leftDays = left.remainingDays ?? Number.MAX_SAFE_INTEGER
     const rightDays = right.remainingDays ?? Number.MAX_SAFE_INTEGER
-    return leftDays - rightDays
+    if (leftDays !== rightDays) return leftDays - rightDays
+    return getComplexityRank(left.complexity) - getComplexityRank(right.complexity)
   })
+}
+
+function getComplexityRank(complexity: string): number {
+  if (complexity.includes('低')) return 0
+  if (complexity.includes('较') || complexity.includes('中')) return 1
+  if (complexity.includes('高')) return 2
+  return 1
 }
 
 function formatDueLabel(remainingDays: number | null | undefined): string {

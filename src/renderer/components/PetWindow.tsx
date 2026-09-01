@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlarmClock, ListTodo, MoreHorizontal } from 'lucide-react'
+import { AlarmClock, ListTodo, StickyNote } from 'lucide-react'
 import { usePet } from '../hooks/usePet'
 import { PetVisual } from '../renderers/PetVisual'
 import type { PetHitTest } from '../renderers/PetVisual'
@@ -161,8 +161,8 @@ export function PetWindow() {
     onPointerClick(event)
   }
 
-  async function recommendTodayTodo() {
-    const result = await window.petApi.recommendTodo()
+  async function recommendTodo(category?: 'default' | 'memo') {
+    const result = await window.petApi.recommendTodo(category)
     await window.petApi.sendPetEvent({ type: 'cheer', payload: { text: result.text } })
   }
 
@@ -217,7 +217,7 @@ export function PetWindow() {
           type="button"
           className="pet-quick-action pet-quick-action--todo"
           title="今日待办推荐"
-          onClick={() => void recommendTodayTodo()}
+          onClick={() => void recommendTodo('default')}
         >
           <ListTodo size={16} />
         </button>
@@ -229,15 +229,14 @@ export function PetWindow() {
         >
           <AlarmClock size={16} />
         </button>
-        <span
-          className="pet-quick-action pet-quick-action--reserved"
-          title="预留功能"
-          role="button"
-          aria-disabled="true"
-          tabIndex={-1}
+        <button
+          type="button"
+          className="pet-quick-action pet-quick-action--memo"
+          title="备忘提醒"
+          onClick={() => void recommendTodo('memo')}
         >
-          <MoreHorizontal size={16} />
-        </span>
+          <StickyNote size={16} />
+        </button>
       </div>
       {alarmEditorVisible ? (
         <form

@@ -28,10 +28,11 @@ export interface PetApi {
   onPetState: (callback: (state: PetWindowState) => void) => () => void
   onConfigChanged: (callback: (config: AppConfig) => void) => () => void
   onPackChanged: (callback: (pack: PetPack) => void) => () => void
+  onPanelTabChanged: (callback: (tab: string) => void) => (() => void)
   sendChat: (text: string) => Promise<ChatMessage | { error: string }>
   testChat: () => Promise<{ ok: boolean; reply?: string; error?: string }>
   getChatHistory: () => Promise<ChatMessage[]>
-  recommendTodo: () => Promise<{ text: string; error?: string }>
+  recommendTodo: (category?: 'default' | 'memo') => Promise<{ text: string; error?: string }>
   getTodos: () => Promise<TodoItem[]>
   addTodo: (title: string, content: string) => Promise<TodoItem>
   completeTodo: (filePath: string, completed: boolean) => Promise<boolean>

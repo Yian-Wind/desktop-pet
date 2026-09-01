@@ -8,12 +8,14 @@ const PET_BASE_SIZE = 320
 const PET_UI_MARGIN_RATIO = 0.5
 const PET_WINDOW_SCALE = 1 + PET_UI_MARGIN_RATIO * 2
 
-function loadRenderer(win: BrowserWindow, windowName: string): void {
+function loadRenderer(win: BrowserWindow, windowName: string, tab?: string): void {
   const devUrl = process.env['ELECTRON_RENDERER_URL']
   if (devUrl) {
-    void win.loadURL(`${devUrl}/?window=${windowName}`)
+    void win.loadURL(`${devUrl}/?window=${windowName}${tab ? `&tab=${tab}` : ''}`)
   } else {
-    void win.loadFile(join(__dirname, '../renderer/index.html'), { query: { window: windowName } })
+    void win.loadFile(join(__dirname, '../renderer/index.html'), {
+      query: { window: windowName, ...(tab ? { tab } : {}) }
+    })
   }
 }
 
@@ -48,7 +50,7 @@ export function createPetWindow(position: { x: number; y: number; scale: number 
   return win
 }
 
-export function createPanelWindow(): BrowserWindow {
+export function createPanelWindow(tab?: 'chat' | 'todos' | 'settings'): BrowserWindow {
   const win = new BrowserWindow({
     width: 860,
     height: 640,
@@ -64,7 +66,7 @@ export function createPanelWindow(): BrowserWindow {
     if (panelWindow === win) panelWindow = null
   })
   panelWindow = win
-  loadRenderer(win, 'panel')
+  loadRenderer(win, 'panel', tab)
   return win
 }
 
@@ -76,8 +78,9 @@ export function getPanelWindow(): BrowserWindow | null {
   return panelWindow
 }
 
-export function openPanel(): void {
-  if (!panelWindow || panelWindow.isDestroyed()) createPanelWindow()
+export function openPanel(tab?: 'chat' | 'todos' | 'settings'): void {
+  if (!panelWindow || panelWindow.isDestroyed()) createPanelWindow(tab)
+  else if (tab) sendToPanel('panel:tab-changed', tab)
   panelWindow?.show()
   panelWindow?.focus()
 }

@@ -126,18 +126,12 @@ body.pet-mode, .pet-root {
   --quick-action-y: 0;
 }
 
-.pet-quick-action--reserved {
+.pet-quick-action--memo {
   --quick-action-delay: 90ms;
   --quick-action-x: calc(var(--quick-action-radius) * -0.7071);
   --quick-action-y: calc(var(--quick-action-radius) * -0.5);
-  cursor: default;
 }
 
-.pet-quick-action--reserved:hover {
-  background: #fff;
-  border-color: var(--line);
-  color: var(--text);
-}
 
 .pet-quick-actions--visible .pet-quick-action {
   opacity: 1;

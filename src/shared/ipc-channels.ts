@@ -23,6 +23,7 @@ export const IPC = {
   OBSIDIAN_ADD_TODO: 'obsidian:add-todo',
   OBSIDIAN_COMPLETE_TODO: 'obsidian:complete-todo',
   WINDOW_OPEN_PANEL: 'window:open-panel',
+  PANEL_TAB_CHANGED: 'panel:tab-changed',
   WINDOW_CLOSE_PANEL: 'window:close-panel',
   WINDOW_QUIT: 'window:quit'
 } as const
