@@ -14,6 +14,7 @@ export const IPC = {
   PET_SET_CLICK_THROUGH: 'pet:set-click-through',
   PET_SET_SIZE: 'pet:set-size',
   PET_CONTEXT_MENU: 'pet:context-menu',
+  PET_ALARM_SCHEDULE: 'pet:alarm-schedule',
   CHAT_SEND: 'chat:send',
   CHAT_TEST: 'chat:test',
   CHAT_GET_HISTORY: 'chat:get-history',

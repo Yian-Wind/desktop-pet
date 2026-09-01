@@ -17,7 +17,6 @@ export function PetWindow() {
   const quickActionsHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [alarmEditorVisible, setAlarmEditorVisible] = useState(false)
   const [alarmMinutes, setAlarmMinutes] = useState('5')
-  const alarmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function applyPetClickThrough(ignore: boolean): void {
     if (clickThroughRef.current === ignore) return
@@ -38,7 +37,6 @@ export function PetWindow() {
   useEffect(() => {
     return () => {
       if (quickActionsHideTimerRef.current) clearTimeout(quickActionsHideTimerRef.current)
-      if (alarmTimerRef.current) clearTimeout(alarmTimerRef.current)
     }
   }, [])
 
@@ -172,16 +170,8 @@ export function PetWindow() {
     const minutes = Number(alarmMinutes)
     if (!Number.isFinite(minutes) || minutes < 1 || minutes > 1440) return
 
-    if (alarmTimerRef.current) clearTimeout(alarmTimerRef.current)
-    alarmTimerRef.current = setTimeout(() => {
-      alarmTimerRef.current = null
-      void window.petApi.sendPetEvent({
-        type: 'alarm',
-        payload: { text: `时间到：${minutes} 分钟定时闹钟` }
-      })
-    }, minutes * 60_000)
-
     setAlarmEditorVisible(false)
+    void window.petApi.scheduleAlarm(minutes)
     void window.petApi.sendPetEvent({
       type: 'alarm',
       payload: { text: `闹钟已设置：${minutes} 分钟后提醒` }

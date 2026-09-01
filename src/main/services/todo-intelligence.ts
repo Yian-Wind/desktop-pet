@@ -104,7 +104,7 @@ export function fallbackTodoRecommendation(
     formatTodoSection('有空关注', longTerm)
   ]
   if (persona?.name?.includes('玛拉妮')) {
-    return `浪头整理好啦！\n${sections.join('\n')}`
+    return `🌊待办整理好啦！\n${sections.join('\n')}`
   }
   if (persona?.name?.toLowerCase().includes('fairy')) {
     return `主人，待办整理好了。\n${sections.join('\n')}`

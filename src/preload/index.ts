@@ -29,6 +29,7 @@ const api: PetApi = {
   setPetSize: (scale: number, packId?: string): Promise<void> => ipcRenderer.invoke(IPC.PET_SET_SIZE, scale, packId),
   setPetClickThrough: (ignore: boolean): Promise<void> => ipcRenderer.invoke(IPC.PET_SET_CLICK_THROUGH, ignore),
   showContextMenu: (): Promise<void> => ipcRenderer.invoke(IPC.PET_CONTEXT_MENU),
+  scheduleAlarm: (minutes: number): Promise<void> => ipcRenderer.invoke(IPC.PET_ALARM_SCHEDULE, minutes),
   onPetState: (callback: (state: PetWindowState) => void): (() => void) => {
     const listener = (_event: unknown, state: PetWindowState) => callback(state)
     ipcRenderer.on('pet:state', listener)

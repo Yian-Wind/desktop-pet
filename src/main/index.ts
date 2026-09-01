@@ -13,6 +13,7 @@ import { BehaviorEngine } from './behavior-engine'
 import { registerIpcHandlers } from './ipc'
 
 registerPetAssetProtocol()
+app.setAppUserModelId('com.desktop-pet.desktop-pet')
 
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {

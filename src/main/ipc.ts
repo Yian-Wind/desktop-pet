@@ -1,4 +1,4 @@
-import { app, ipcMain, BrowserWindow, Menu, shell } from 'electron'
+import { app, ipcMain, BrowserWindow, Menu, Notification, shell } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 import type { AppConfig, ChatMessage, CorpusConfig, PersonaConfig, PetEvent, PetPack } from '../shared/types'
 import { ConfigStore } from './config'
@@ -20,6 +20,7 @@ export function registerIpcHandlers(
 ): void {
   const chatHistoryByPack = new Map<string, ChatMessage[]>()
   let petDropTimer: ReturnType<typeof setInterval> | null = null
+  let alarmTimer: ReturnType<typeof setTimeout> | null = null
 
   const dropDistance = 10
   const dropFallDuration = 140
@@ -179,6 +180,28 @@ export function registerIpcHandlers(
       { label: '退出', click: () => app.quit() }
     ]
     Menu.buildFromTemplate(template).popup({ window: win })
+  })
+
+  ipcMain.handle(IPC.PET_ALARM_SCHEDULE, (_event, minutes: number) => {
+    if (!Number.isFinite(minutes) || minutes < 1 || minutes > 1440) {
+      throw new Error('闹钟时间必须在 1-1440 分钟之间')
+    }
+
+    if (alarmTimer) clearTimeout(alarmTimer)
+    alarmTimer = setTimeout(() => {
+      alarmTimer = null
+      const text = `时间到：${minutes} 分钟定时闹钟`
+      void behavior.handle({ type: 'alarm', payload: { text } })
+
+      const notification = new Notification({
+        title: '桌面宠物闹钟',
+        body: text,
+        silent: false
+      })
+      notification.on('click', () => openPanel())
+      notification.show()
+    }, minutes * 60_000)
+    return true
   })
 
   ipcMain.handle(IPC.CHAT_GET_HISTORY, () => getChatHistory(config.get().currentPackId))

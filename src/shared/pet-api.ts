@@ -24,6 +24,7 @@ export interface PetApi {
   setPetSize: (scale: number, packId?: string) => Promise<void>
   setPetClickThrough: (ignore: boolean) => Promise<void>
   showContextMenu: () => Promise<void>
+  scheduleAlarm: (minutes: number) => Promise<void>
   onPetState: (callback: (state: PetWindowState) => void) => () => void
   onConfigChanged: (callback: (config: AppConfig) => void) => () => void
   onPackChanged: (callback: (pack: PetPack) => void) => () => void
