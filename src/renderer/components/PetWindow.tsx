@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlarmClock, ListTodo, StickyNote } from 'lucide-react'
 import { usePet } from '../hooks/usePet'
 import { PetVisual } from '../renderers/PetVisual'
-import type { PetHitTest } from '../renderers/PetVisual'
+import type { PetHitTest, PetVisualBounds } from '../renderers/PetVisual'
 
 const quickActionHideDelayMs = 240
 
@@ -14,7 +14,9 @@ export function PetWindow() {
   const lastHitTestAtRef = useRef(0)
   const pointerOnPetRef = useRef(false)
   const [quickActionsVisible, setQuickActionsVisible] = useState(false)
+  const [visualBounds, setVisualBounds] = useState<PetVisualBounds | null>(null)
   const quickActionsHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const quickActionButtonSize = 38.4
   const [alarmEditorVisible, setAlarmEditorVisible] = useState(false)
   const [alarmMinutes, setAlarmMinutes] = useState('5')
 
@@ -25,14 +27,23 @@ export function PetWindow() {
   }
 
   const handleHitTestReady = useCallback(() => {
+    setVisualBounds(hitTestRef.current?.getVisualBounds() ?? null)
     applyPetClickThrough(true)
   }, [])
 
   useEffect(() => {
-    if (pack?.manifest.type === 'spine') return
-    hitTestRef.current = null
-    applyPetClickThrough(false)
-  }, [pack?.manifest.id, pack?.manifest.type])
+    setQuickActionsVisible(false)
+    setAlarmEditorVisible(false)
+    pointerOnPetRef.current = false
+  }, [pack?.manifest.id])
+
+  useEffect(() => {
+    const refreshVisualBounds = () => {
+      setVisualBounds(hitTestRef.current?.getVisualBounds() ?? null)
+    }
+    window.addEventListener('resize', refreshVisualBounds)
+    return () => window.removeEventListener('resize', refreshVisualBounds)
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -46,6 +57,40 @@ export function PetWindow() {
 
   function isPointOnPet(event: React.PointerEvent | React.MouseEvent): boolean {
     return hitTestRef.current?.isPointOnPet(event.clientX, event.clientY) ?? true
+  }
+
+  function getFallbackVisualBounds(target: HTMLElement): PetVisualBounds {
+    const rect = target.getBoundingClientRect()
+    const inset = rect.width * 0.2685
+    const width = Math.max(1, rect.width - inset * 2)
+    const height = Math.max(1, rect.height - inset * 2)
+    return {
+      left: rect.left + inset,
+      top: rect.top + inset,
+      width,
+      height,
+      centerX: rect.left + rect.width / 2,
+      centerY: rect.top + rect.height / 2
+    }
+  }
+
+  function getVisualBoundsForLayout(event: React.PointerEvent | React.MouseEvent): PetVisualBounds {
+    return hitTestRef.current?.getVisualBounds() ?? getFallbackVisualBounds(event.currentTarget as HTMLElement)
+  }
+
+  function getQuickActionLayout(bounds: PetVisualBounds): {
+    buttonSize: number
+    orbitRadius: number
+    retentionRadius: number
+  } {
+    const visualExtent = Math.max(bounds.width, bounds.height)
+    const buttonSize = quickActionButtonSize
+    const orbitRadius = visualExtent / 2 + buttonSize * 0.85
+    return {
+      buttonSize,
+      orbitRadius,
+      retentionRadius: orbitRadius + buttonSize * 1.1
+    }
   }
 
   function updateClickThrough(event: React.PointerEvent, forceActive = false): void {
@@ -88,12 +133,9 @@ export function PetWindow() {
   }
 
   function isInsideQuickActionRetentionZone(event: React.PointerEvent | React.MouseEvent): boolean {
-    const rect = event.currentTarget.getBoundingClientRect()
-    const stageSize = rect.width * 0.588235
-    const centerX = rect.left + rect.width / 2
-    const centerY = rect.top + rect.height * 0.20588 + stageSize * 0.31
-    const retentionRadius = stageSize * 0.42
-    return Math.hypot(event.clientX - centerX, event.clientY - centerY) <= retentionRadius
+    const bounds = getVisualBoundsForLayout(event)
+    const { retentionRadius } = getQuickActionLayout(bounds)
+    return Math.hypot(event.clientX - bounds.centerX, event.clientY - bounds.centerY) <= retentionRadius
   }
 
   function handlePointerDown(event: React.PointerEvent) {
@@ -196,9 +238,20 @@ export function PetWindow() {
     window.petApi.showContextMenu()
   }
 
+  const quickActionStyle = visualBounds
+    ? ({
+        '--pet-visual-center-x': `${visualBounds.centerX}px`,
+        '--pet-visual-center-y': `${visualBounds.centerY}px`,
+        '--pet-visual-top': `${visualBounds.top}px`,
+        '--pet-quick-action-size': `${getQuickActionLayout(visualBounds).buttonSize}px`,
+        '--pet-quick-action-radius': `${getQuickActionLayout(visualBounds).orbitRadius}px`
+      } as React.CSSProperties)
+    : undefined
+
   return (
     <div
       className={`pet-root pet-root--${state.action}`}
+      style={quickActionStyle}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}

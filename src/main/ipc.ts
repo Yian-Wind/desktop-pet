@@ -8,7 +8,7 @@ import { ObsidianBaseService } from './services/obsidian-base'
 import { buildChatTodoContext, buildTodoRecommendationMessages, ensureTodoReplyPrefix, fallbackMemoRecommendation, fallbackTodoRecommendation, parseTodoRecommendationReply } from './services/todo-intelligence'
 import { SkillBus } from './skill-bus'
 import { BehaviorEngine } from './behavior-engine'
-import { getPetStagePosition, getPetWindow, getPetWindowMargin, openPanel, sendToPanel, sendToPet, setPetScale, setPetStagePosition } from './windows'
+import { getPetStagePosition, getPetWindow, getPetWindowMargins, openPanel, sendToPanel, sendToPet, setPetScale, setPetStagePosition } from './windows'
 
 export function registerIpcHandlers(
   config: ConfigStore,
@@ -114,8 +114,8 @@ export function registerIpcHandlers(
     stopPetDrop()
     const win = getPetWindow()
     if (!win || win.isDestroyed()) return
-    const margin = getPetWindowMargin(win.getBounds().width)
-    setPetStagePosition(x + margin, y + margin)
+    const margins = getPetWindowMargins()
+    setPetStagePosition(x + margins.horizontal, y + margins.vertical)
   })
 
   ipcMain.handle(IPC.PET_DROP, () => {

@@ -1,10 +1,20 @@
 import type { RefObject } from 'react'
 import type { PetPack, PetWindowState } from '../../shared/types'
-import { GifPetAdapter, Live2DPetAdapter } from './PetVisualAdapter'
+import { GifPetVisual } from './GifPetVisual'
 import { SpinePetVisual } from './SpinePetVisual'
+
+export interface PetVisualBounds {
+  left: number
+  top: number
+  width: number
+  height: number
+  centerX: number
+  centerY: number
+}
 
 export interface PetHitTest {
   isPointOnPet: (clientX: number, clientY: number) => boolean
+  getVisualBounds: () => PetVisualBounds | null
 }
 
 interface PetVisualProps {
@@ -28,10 +38,6 @@ export function PetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, onHit
     )
   }
 
-  const adapter = pack.manifest.type === 'live2d' ? new Live2DPetAdapter() : new GifPetAdapter()
-  adapter.load(pack)
-  adapter.play(state)
-
   if (pack.manifest.type === 'live2d') {
     return (
       <div className={`pet-live2d pet-live2d--${state.emotion}`}>
@@ -40,14 +46,12 @@ export function PetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, onHit
     )
   }
 
-  const sprite = pack.assets['sprite']
-  const url = `pet-asset://pack/${sprite}`
   return (
-    <img
-      className={`pet-sprite pet-sprite--${state.action} pet-sprite--${state.emotion}`}
-      src={url}
-      alt={pack.manifest.name}
-      draggable={false}
+    <GifPetVisual
+      pack={pack}
+      state={state}
+      hitTestRef={hitTestRef}
+      onHitTestReady={onHitTestReady}
     />
   )
 }

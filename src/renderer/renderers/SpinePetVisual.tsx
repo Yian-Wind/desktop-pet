@@ -14,7 +14,7 @@ import {
 import type { TextureAtlas } from '@esotericsoftware/spine-webgl'
 import type { PetPack, PetWindowState } from '../../shared/types'
 import { CLICK_EXCLUDED_ANIMATIONS } from '../../shared/animation-pool'
-import type { PetHitTest } from './PetVisual'
+import type { PetHitTest, PetVisualBounds } from './PetVisual'
 
 const ACTION_ANIMATIONS: Record<string, string> = {
   idle: 'eye',
@@ -35,6 +35,13 @@ const DROP_FALL_SECONDS = 0.14
 const DROP_SPRING_SECONDS = 0.32
 const DRAG_EYE_ATTACHMENT = 'gt-lt-eyes'
 const DRAG_EYE_SLOT = 'gt-lt-eyes'
+
+interface CanvasSourceBounds {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
 const SURF_EXIT_END_SECONDS = 2.8333
 const SURF_RETURN_START_SECONDS = 3.3333
 const SURF_RETURN_END_SECONDS = 6.129
@@ -126,6 +133,46 @@ function applyStructuralDropSpring(runtime: SpineRuntime, delta: number): void {
   }
 }
 
+function getOpaqueCanvasBounds(
+  gl: WebGLRenderingContext,
+  width: number,
+  height: number
+): CanvasSourceBounds | null {
+  if (!width || !height) return null
+  const pixels = new Uint8Array(width * height * 4)
+  gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels)
+
+  let left = -1
+  let top = -1
+  let right = -1
+  let bottom = -1
+  for (let yFromBottom = 0; yFromBottom < height; yFromBottom += 1) {
+    const y = height - 1 - yFromBottom
+    for (let x = 0; x < width; x += 1) {
+      const alpha = pixels[(yFromBottom * width + x) * 4 + 3]
+      if (alpha <= 8) continue
+      if (left === -1 || x < left) left = x
+      if (top === -1 || y < top) top = y
+      if (x > right) right = x
+      if (y > bottom) bottom = y
+    }
+  }
+  if (left === -1) return null
+  return { left, top, right, bottom }
+}
+
+function getCanvasVisualBounds(
+  canvas: HTMLCanvasElement,
+  sourceBounds: CanvasSourceBounds
+): PetVisualBounds {
+  const rect = canvas.getBoundingClientRect()
+  const left = rect.left + (sourceBounds.left / canvas.width) * rect.width
+  const top = rect.top + (sourceBounds.top / canvas.height) * rect.height
+  const width = Math.max(1, ((sourceBounds.right - sourceBounds.left + 1) / canvas.width) * rect.width)
+  const height = Math.max(1, ((sourceBounds.bottom - sourceBounds.top + 1) / canvas.height) * rect.height)
+  return { left, top, width, height, centerX: left + width / 2, centerY: top + height / 2 }
+}
+
 function setDragExpression(skeleton: Skeleton, enabled: boolean): void {
   const dragEyeSlot = skeleton.findSlot(DRAG_EYE_SLOT)
   if (!dragEyeSlot) return
@@ -178,6 +225,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const spineCanvasRef = useRef<SpineCanvas | null>(null)
   const runtimeRef = useRef<SpineRuntime | null>(null)
+  const visualSourceBoundsRef = useRef<CanvasSourceBounds | null>(null)
   const lastClickAnimationRef = useRef<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
@@ -391,30 +439,46 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
 
   useEffect(() => {
     if (!ready) return
-    hitTestRef.current = {
-      isPointOnPet(clientX, clientY) {
-        const canvas = canvasRef.current
-        const spineCanvas = spineCanvasRef.current
-        if (!canvas || !spineCanvas) return false
+    const frame = requestAnimationFrame(() => {
+      const canvas = canvasRef.current
+      const spineCanvas = spineCanvasRef.current
+      if (!canvas || !spineCanvas) return
+      visualSourceBoundsRef.current = getOpaqueCanvasBounds(spineCanvas.gl, canvas.width, canvas.height)
 
-        const rect = canvas.getBoundingClientRect()
-        const x = clientX - rect.left
-        const y = clientY - rect.top
-        if (x < 0 || y < 0 || x >= rect.width || y >= rect.height) return false
+      hitTestRef.current = {
+        isPointOnPet(clientX, clientY) {
+          const hitCanvas = canvasRef.current
+          const hitSpineCanvas = spineCanvasRef.current
+          if (!hitCanvas || !hitSpineCanvas) return false
 
-        const pixelX = Math.floor((x / rect.width) * canvas.width)
-        const pixelY = Math.floor((y / rect.height) * canvas.height)
-        if (pixelX < 0 || pixelY < 0 || pixelX >= canvas.width || pixelY >= canvas.height) return false
+          const rect = hitCanvas.getBoundingClientRect()
+          const x = clientX - rect.left
+          const y = clientY - rect.top
+          if (x < 0 || y < 0 || x >= rect.width || y >= rect.height) return false
 
-        const gl = spineCanvas.gl
-        const pixel = new Uint8Array(4)
-        gl.readPixels(pixelX, canvas.height - 1 - pixelY, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel)
-        return pixel[3] > 8
+          const pixelX = Math.floor((x / rect.width) * hitCanvas.width)
+          const pixelY = Math.floor((y / rect.height) * hitCanvas.height)
+          if (pixelX < 0 || pixelY < 0 || pixelX >= hitCanvas.width || pixelY >= hitCanvas.height) return false
+
+          const gl = hitSpineCanvas.gl
+          const pixel = new Uint8Array(4)
+          gl.readPixels(pixelX, hitCanvas.height - 1 - pixelY, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel)
+          return pixel[3] > 8
+        },
+        getVisualBounds() {
+          const boundsCanvas = canvasRef.current
+          const sourceBounds = visualSourceBoundsRef.current
+          if (!boundsCanvas || !sourceBounds) return null
+          return getCanvasVisualBounds(boundsCanvas, sourceBounds)
+        }
       }
-    }
-    onHitTestReady?.()
+      onHitTestReady?.()
+    })
+
     return () => {
+      cancelAnimationFrame(frame)
       hitTestRef.current = null
+      visualSourceBoundsRef.current = null
     }
   }, [hitTestRef, onHitTestReady, ready])
 

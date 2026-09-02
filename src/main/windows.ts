@@ -6,7 +6,7 @@ let panelWindow: BrowserWindow | null = null
 
 const PET_BASE_SIZE = 320
 const PET_UI_MARGIN_RATIO = 0.58
-const PET_WINDOW_SCALE = 1 + PET_UI_MARGIN_RATIO * 2
+const PET_UI_MIN_VERTICAL_MARGIN = 300
 
 function loadRenderer(win: BrowserWindow, windowName: string, tab?: string): void {
   const devUrl = process.env['ELECTRON_RENDERER_URL']
@@ -22,13 +22,14 @@ function loadRenderer(win: BrowserWindow, windowName: string, tab?: string): voi
 export function createPetWindow(position: { x: number; y: number; scale: number }): BrowserWindow {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
   const stageSize = PET_BASE_SIZE * (position.scale || 1)
-  const size = Math.round(stageSize * PET_WINDOW_SCALE)
-  const margin = getPetWindowMargin(size)
+  const margins = getPetMarginsForStage(stageSize)
+  const windowWidth = Math.round(stageSize + margins.horizontal * 2)
+  const windowHeight = Math.round(stageSize + margins.vertical * 2)
   const win = new BrowserWindow({
-    width: size,
-    height: size,
-    x: (position.x || width - stageSize - 40) - margin,
-    y: (position.y || height - stageSize - 40) - margin,
+    width: windowWidth,
+    height: windowHeight,
+    x: (position.x || width - stageSize - 40) - margins.horizontal,
+    y: (position.y || height - stageSize - 40) - margins.vertical,
     transparent: true,
     frame: false,
     alwaysOnTop: true,
@@ -97,34 +98,48 @@ export function sendToPanel(channel: string, payload: unknown): void {
 
 export function setPetScale(scale: number): void {
   if (!petWindow || petWindow.isDestroyed()) return
-  const size = Math.round(PET_BASE_SIZE * (scale || 1) * PET_WINDOW_SCALE)
+  const stageSize = PET_BASE_SIZE * (scale || 1)
+  const margins = getPetMarginsForStage(stageSize)
+  const windowWidth = Math.round(stageSize + margins.horizontal * 2)
+  const windowHeight = Math.round(stageSize + margins.vertical * 2)
   const bounds = petWindow.getBounds()
-  const centerX = bounds.x + bounds.width / 2
-  const centerY = bounds.y + bounds.height / 2
+  const centerStageX = bounds.x + getPetWindowMargins().horizontal + stageSize / 2
+  const centerStageY = bounds.y + getPetWindowMargins().vertical + stageSize / 2
   petWindow.setBounds({
-    x: Math.round(centerX - size / 2),
-    y: Math.round(centerY - size / 2),
-    width: size,
-    height: size
+    x: Math.round(centerStageX - stageSize / 2 - margins.horizontal),
+    y: Math.round(centerStageY - stageSize / 2 - margins.vertical),
+    width: windowWidth,
+    height: windowHeight
   })
 }
 
-export function getPetWindowMargin(windowSize: number): number {
-  return Math.round(windowSize * (PET_UI_MARGIN_RATIO / PET_WINDOW_SCALE))
+export function getPetWindowMargins(): { horizontal: number; vertical: number } {
+  if (!petWindow || petWindow.isDestroyed()) return { horizontal: 0, vertical: 0 }
+  const bounds = petWindow.getBounds()
+  const stageSize = bounds.width / (1 + PET_UI_MARGIN_RATIO * 2)
+  return getPetMarginsForStage(stageSize)
+}
+
+function getPetMarginsForStage(stageSize: number): { horizontal: number; vertical: number } {
+  const horizontal = Math.round(stageSize * PET_UI_MARGIN_RATIO)
+  return {
+    horizontal,
+    vertical: Math.max(PET_UI_MIN_VERTICAL_MARGIN, horizontal)
+  }
 }
 
 function getPetStageOrigin(): { x: number; y: number } {
   if (!petWindow || petWindow.isDestroyed()) return { x: 0, y: 0 }
   const bounds = petWindow.getBounds()
-  const margin = getPetWindowMargin(bounds.width)
-  return { x: bounds.x + margin, y: bounds.y + margin }
+  const margins = getPetMarginsForStage(bounds.width / (1 + PET_UI_MARGIN_RATIO * 2))
+  return { x: bounds.x + margins.horizontal, y: bounds.y + margins.vertical }
 }
 
 export function setPetStagePosition(x: number, y: number): void {
   if (!petWindow || petWindow.isDestroyed()) return
   const bounds = petWindow.getBounds()
-  const margin = getPetWindowMargin(bounds.width)
-  petWindow.setPosition(Math.round(x - margin), Math.round(y - margin))
+  const margins = getPetMarginsForStage(bounds.width / (1 + PET_UI_MARGIN_RATIO * 2))
+  petWindow.setPosition(Math.round(x - margins.horizontal), Math.round(y - margins.vertical))
 }
 
 export function getPetStagePosition(): { x: number; y: number } {
