@@ -151,7 +151,12 @@ export function setPetStagePosition(x: number, y: number): void {
   if (!petWindow || petWindow.isDestroyed()) return
   const bounds = petWindow.getBounds()
   const margins = getPetMarginsForStage(bounds.width / (1 + PET_UI_MARGIN_RATIO * 2))
-  petWindow.setPosition(Math.round(x - margins.horizontal), Math.round(y - margins.vertical))
+  const targetX = Math.round(x - margins.horizontal)
+  const targetY = Math.round(y - margins.vertical)
+  // getBounds() can briefly report NaN mid DPI/scale transitions; a NaN here
+  // would crash setPosition with an opaque conversion failure.
+  if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) return
+  petWindow.setPosition(targetX, targetY)
 }
 
 export function getPetStagePosition(): { x: number; y: number } {

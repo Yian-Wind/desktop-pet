@@ -1,4 +1,4 @@
-import { app, ipcMain, BrowserWindow, Menu, Notification, shell } from 'electron'
+import { app, ipcMain, BrowserWindow, Menu, Notification, screen, shell } from 'electron'
 import { IPC } from '../shared/ipc-channels'
 import type { AppConfig, ChatMessage, CorpusConfig, PersonaConfig, PetEvent, PetPack } from '../shared/types'
 import { ConfigStore } from './config'
@@ -114,8 +114,14 @@ export function registerIpcHandlers(
     stopPetDrop()
     const win = getPetWindow()
     if (!win || win.isDestroyed()) return
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return
+    // Keep the window reachable: an unbounded drag can push it far off-screen,
+    // after which the user can't grab it anymore.
+    const { width, height } = screen.getPrimaryDisplay().workAreaSize
+    const clampedX = Math.min(Math.max(x, 0), width)
+    const clampedY = Math.min(Math.max(y, 0), height)
     const margins = getPetWindowMargins()
-    setPetStagePosition(x + margins.horizontal, y + margins.vertical)
+    setPetStagePosition(clampedX + margins.horizontal, clampedY + margins.vertical)
   })
 
   ipcMain.handle(IPC.PET_DROP, () => {
