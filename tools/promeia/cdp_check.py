@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""CDP-based runtime verification for the Promiya pet window."""
+"""CDP-based runtime verification for the Promeia pet window."""
 import json
 import sys
 import time

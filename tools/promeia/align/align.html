@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>Promiya 大衣对齐工具</title>
+<title>Promeia 大衣对齐工具</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #20242c; color: #e6e8ec; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; display: flex; height: 100vh; overflow: hidden; }
@@ -38,7 +38,7 @@
     </div>
   </div>
   <div id="panel">
-    <h1>Promiya 大衣对齐</h1>
+    <h1>Promeia 大衣对齐</h1>
     <div class="hint">
       拖动大衣调整位置；滚轮或滑块调整缩放（宽高可分开调）。<br>
       数字框可直接输入精确值（画布坐标 1254×1254）。<br>
@@ -192,7 +192,7 @@ document.getElementById('save').addEventListener('click', () => {
   a.download = 'align_result.json'
   a.click()
   document.getElementById('status').textContent =
-    '已开始下载 align_result.json —— 把它放到 D:\\pet\\tools\\promiya\\align\\ 覆盖即可。'
+    '已开始下载 align_result.json —— 把它放到 D:\\pet\\tools\\promeia\\align\\ 覆盖即可。'
 })
 document.getElementById('copy').addEventListener('click', async () => {
   await navigator.clipboard.writeText(JSON.stringify(result(), null, 2))

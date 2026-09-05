@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Promiya asset pipeline.
+"""Promeia asset pipeline.
 
 1. AI-cutout (rembg) the white/black background front images, keeping the
    1254x1254 canvas intact.
@@ -9,7 +9,7 @@
 3. Emit nocoat.png / nocoat_eyeclosed.png / coat_overlay.png plus a composite
    preview for manual inspection.
 
-Usage: python tools/promiya/process_assets.py
+Usage: python tools/promeia/process_assets.py
 """
 
 import sys
@@ -19,9 +19,9 @@ import numpy as np
 from PIL import Image
 from rembg import remove, new_session
 
-SRC = Path(r"D:\pet-promiya\pet_reference\promiya")
+SRC = Path(r"D:\pet-promeia\pet_reference\promeia")
 GEN = SRC / "gpt_generate"
-OUT = Path(r"D:\pet\packs\promiya\assets")
+OUT = Path(r"D:\pet\packs\promeia\assets")
 CANVAS = 1254
 
 
