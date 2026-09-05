@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Surf Calibrate</title>
+<style>
+  body { margin: 0; padding: 8px; background: #2b3140; color: #dfe8f5; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; }
+  #stage { position: relative; width: 760px; height: 952px; }
+  #stage canvas.bg { position: absolute; inset: 0; background: #dfeaf4; }
+  #stage canvas.overlay { position: absolute; inset: 0; pointer-events: none; }
+  #status { font-size: 12px; margin-top: 6px; white-space: pre-wrap; color: #8fd3a0; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg" class="bg"></canvas>
+  <canvas id="overlay" class="overlay"></canvas>
+</div>
+<div id="status">loading…</div>
+<script src="http://127.0.0.1:{{PORT}}/node_modules/@esotericsoftware/spine-webgl/dist/iife/spine-webgl.js"></script>
+<script>
+const SPINE = window.spine
+const PATH = 'http://127.0.0.1:{{PORT}}/packs/mualani/'
+
+// 与应用一致：scale=1.1 时窗口 760x952，画布铺满窗口
+const CANVAS_W = 760
+const CANVAS_H = 952
+const FIT_MARGIN = 1.15
+
+// 与 SpinePetVisual.tsx 相同的切片常量（可被 query 覆盖）
+const q = new URLSearchParams(location.search)
+const num = (k, d) => { const v = parseFloat(q.get(k)); return Number.isFinite(v) ? v : d }
+const EXIT_END = 2.8333
+const RETURN_START = 3.3333
+const RETURN_END = num('re', 6.0152)
+const BRAKE_START = num('bs', 1.2333)  // 刹车借用"落板站稳"切片（板全亮、无跳起），与下板倒放起点同帧
+const BRAKE_END = num('be', 1.6333)
+const BRAKE_OFFSET = num('off', 178.0)
+const BRAKE_SECONDS = num('bt', BRAKE_END - BRAKE_START)
+const ROOT_LIFT_Y = num('ly', 18.97)  // root translate y 仅 raw≥3.3333 生效：滑行段抬高 18.97，站稳段没有 → 补抬升
+const BRAKE_Y_START = num('ys', 68.3) // 滑回切点 worldY
+const DISMOUNT_START = 9.3333 - BRAKE_END // 倒放采样 raw 1.6333→0，与刹车末帧同帧无缝
+const DISMOUNT_END = 9.3333
+const MODE = q.get('mode') || 'seq'   // seq=完整序列 | raw=直接采样动画 raw 时间
+const TIMES = (q.get('t') || '5.7,5.8,5.9,6.0,6.0152,6.1,6.129').split(',').map(Number)
+
+const statusEl = document.getElementById('status')
+const diag = []
+function log(s) { diag.push(s); statusEl.textContent = diag.join('\n') }
+
+async function loadAssets(context) {
+  const assetManager = new SPINE.AssetManager(context)
+  const atlasUrl = PATH + 'sl.atlas'
+  assetManager.loadJson(PATH + 'mualani.json')
+  assetManager.loadTextureAtlas(atlasUrl)
+  await assetManager.loadAll()
+  return new SPINE.SkeletonJson(new SPINE.AtlasAttachmentLoader(assetManager.require(atlasUrl)))
+    .readSkeletonData(assetManager.require(PATH + 'mualani.json'))
+}
+
+// 复刻 playSurfSequence：段间用 addAnimation 链 + 刹车 root 叠加
+function setupSequence(state) {
+  const exitEntry = state.setAnimation(0, '冲浪', false)
+  exitEntry.animationStart = 0
+  exitEntry.animationEnd = EXIT_END
+  exitEntry.mixDuration = 0
+
+  const returnEntry = state.addAnimation(0, '冲浪', false, EXIT_END)
+  returnEntry.animationStart = RETURN_START
+  returnEntry.animationEnd = RETURN_END
+  returnEntry.mixDuration = 0
+
+  const brakeEntry = state.addAnimation(0, '冲浪', false, RETURN_END - RETURN_START)
+  brakeEntry.animationStart = BRAKE_START
+  brakeEntry.animationEnd = BRAKE_START + BRAKE_SECONDS
+  brakeEntry.mixDuration = 0
+
+  const dismountEntry = state.addAnimation(0, '冲浪', false, BRAKE_SECONDS)
+  dismountEntry.animationStart = DISMOUNT_START
+  dismountEntry.animationEnd = DISMOUNT_END
+  dismountEntry.reverse = true
+  dismountEntry.mixDuration = 0
+}
+
+// 复刻 applySurfEffects：刹车段 root.x 减速 + y 起点对齐滑行末并补 root 抬升；
+// 下板段延续抬升、落地前淡出，板 alpha 在顶点后淡出（与 SpinePetVisual.tsx 一致）
+const BRAKE_Y0 = num('by', 44.1) // 刹车切片起点 native worldY
+function applySurfEffects(state, skeleton, delta) {
+  const root = skeleton.getRootBone()
+  const current = state.getCurrent(0)
+  if (!current) return 0
+  const boardSlot = skeleton.findSlot('鲨鱼')
+
+  if (current.animationStart === BRAKE_START && current.animationEnd === BRAKE_START + BRAKE_SECONDS) {
+    const elapsed = (current.__elapsed = (current.__elapsed ?? 0) + delta)
+    const progress = Math.min(1, elapsed / BRAKE_SECONDS)
+    if (elapsed < 0) return 0
+    if (elapsed >= BRAKE_SECONDS) {
+      // 刹车已走完但下板段尚未接管：保持满抬升避免高度突降
+      root.y += ROOT_LIFT_Y
+      if (boardSlot) boardSlot.color.a = 1
+      return 0
+    }
+    const ease = 1 - Math.pow(1 - progress, 3)
+    const offset = BRAKE_OFFSET * (1 - ease)
+    root.x -= offset
+    root.y += (BRAKE_Y_START - BRAKE_Y0) * (1 - ease) + ROOT_LIFT_Y * ease
+    if (boardSlot) boardSlot.color.a = 1
+    return offset
+  }
+
+  if (current.reverse && current.animationStart === DISMOUNT_START) {
+    const elapsed = (current.__elapsed = (current.__elapsed ?? 0) + delta)
+    const progress = Math.min(1, elapsed / (9.3333 - DISMOUNT_START))
+    // 抬升在下落段（raw 0.9→0.6333 → p 0.449..0.612）线性淡出
+    const liftFade = 1 - Math.min(1, Math.max(0, (progress - 0.449) / 0.163))
+    root.y += ROOT_LIFT_Y * liftFade
+    // 板在顶点后淡出（p 0.45→0.65）
+    if (boardSlot) boardSlot.color.a = progress < 0.3 ? 1 : Math.max(0, 1 - (progress - 0.3) / 0.2)
+    return 0
+  }
+  return 0
+}
+
+async function init() {
+  const canvas = document.getElementById('bg')
+  canvas.width = CANVAS_W
+  canvas.height = CANVAS_H
+  const context = new SPINE.ManagedWebGLRenderingContext(canvas, { alpha: true, antialias: true, preserveDrawingBuffer: true })
+  const skeletonData = await loadAssets(context)
+  const probe = new SPINE.Skeleton(skeletonData)
+  probe.setToSetupPose()
+  probe.updateWorldTransform(SPINE.Physics.update)
+  const b = probe.getBoundsRect()
+  log(`bounds x=${b.x.toFixed(2)} y=${b.y.toFixed(2)} w=${b.width.toFixed(2)} h=${b.height.toFixed(2)}`)
+
+  const renderer = new SPINE.SceneRenderer(canvas, context)
+  window.__frames = []
+
+  for (const t of TIMES) {
+    const skeleton = new SPINE.Skeleton(skeletonData)
+    const defaultSkin = skeletonData.findSkin('default')
+    const leftSkin = skeletonData.findSkin('left')
+    if (defaultSkin && leftSkin) {
+      const combined = new SPINE.Skin('pet-left')
+      combined.addSkin(defaultSkin); combined.addSkin(leftSkin)
+      skeleton.setSkin(combined)
+    }
+    skeleton.setToSetupPose()
+    skeleton.updateWorldTransform(SPINE.Physics.update)
+
+    const state = new SPINE.AnimationState(new SPINE.AnimationStateData(skeletonData))
+    if (MODE === 'seq') {
+      setupSequence(state)
+    } else {
+      const entry = state.setAnimation(0, '冲浪', false)
+      entry.animationStart = 0
+      entry.animationEnd = 9.3333
+    }
+
+    // 以 1/60 步进推进到目标时刻（保证 physics 与应用行为一致）
+    const steps = Math.max(1, Math.round(t * 60))
+    const delta = t / steps
+    let brakeOffset = 0
+    for (let i = 0; i < steps; i++) {
+      state.update(delta)
+      state.apply(skeleton)
+      brakeOffset = applySurfEffects(state, skeleton, delta)
+      skeleton.updateWorldTransform(SPINE.Physics.update)
+    }
+
+    // 相机：复刻应用 render()
+    const camera = renderer.camera
+    camera.position.x = b.x + b.width / 2
+    camera.position.y = b.y + b.height / 2
+    camera.zoom = Math.max(b.width / CANVAS_W, b.height / CANVAS_H) * FIT_MARGIN
+    camera.setViewport(CANVAS_W, CANVAS_H)
+    camera.update()
+    context.gl.clearColor(0.875, 0.918, 0.957, 1)
+    context.gl.clear(context.gl.COLOR_BUFFER_BIT)
+    renderer.begin()
+    renderer.drawSkeleton(skeleton, false)
+    renderer.end()
+
+    // 数值诊断：世界 x 与屏幕 x
+    const root = skeleton.getRootBone()
+    const bone = skeleton.findBone('bone')
+    const sharkSlot = skeleton.findSlot('鲨鱼')
+    const worldCharX = bone.worldX
+    const screenX = CANVAS_W / 2 + (worldCharX - camera.position.x) / camera.zoom
+    const visHalfW = (CANVAS_W / 2) * camera.zoom
+    const visHalfH = (CANVAS_H / 2) * camera.zoom
+    const entry = state.getCurrent(0)
+    log(`t=${t.toFixed(4)} mode=${MODE} trackTime=${entry ? entry.trackTime.toFixed(4) : '-'} ` +
+        `raw=${entry ? (entry.reverse ? 9.3333 - Math.min(entry.trackTime + entry.animationStart, entry.animationEnd) : Math.min(entry.trackTime + entry.animationStart, entry.animationEnd)).toFixed(3) : '-'} ` +
+        `brake=${brakeOffset.toFixed(1)} root.x=${root.x.toFixed(1)} worldX=${worldCharX.toFixed(1)} worldY=${bone.worldY.toFixed(1)} sharkA=${sharkSlot.color.a.toFixed(2)} screenX=${screenX.toFixed(0)} ` +
+        `visibleX=[${(camera.position.x - visHalfW).toFixed(0)}, ${(camera.position.x + visHalfW).toFixed(0)}] ` +
+        `visibleY=[${(camera.position.y - visHalfH).toFixed(0)}, ${(camera.position.y + visHalfH).toFixed(0)}]`)
+
+    // 网格标注：世界坐标刻度 + 角色位置红线
+    const overlay = document.getElementById('overlay')
+    overlay.width = CANVAS_W
+    overlay.height = CANVAS_H
+    const octx = overlay.getContext('2d')
+    octx.strokeStyle = 'rgba(60,90,180,0.35)'
+    octx.fillStyle = 'rgba(60,90,180,0.8)'
+    octx.font = '11px sans-serif'
+    for (const frac of [0.25, 0.5, 0.75]) {
+      const x = CANVAS_W * frac
+      octx.beginPath(); octx.moveTo(x, 0); octx.lineTo(x, CANVAS_H); octx.stroke()
+      const wx = camera.position.x + (x - CANVAS_W / 2) * camera.zoom
+      octx.fillText(wx.toFixed(0), x + 3, 14)
+    }
+    octx.strokeStyle = 'rgba(200,80,80,0.5)'
+    octx.beginPath(); octx.moveTo(screenX, 0); octx.lineTo(screenX, CANVAS_H); octx.stroke()
+    octx.fillStyle = 'rgba(200,80,80,0.9)'
+    octx.fillText('char=' + worldCharX.toFixed(0), screenX + 3, 30)
+
+    window.__frames.push({ t, png: canvas.toDataURL('image/png') })
+  }
+  document.title = 'done'
+  log(log.length ? diag.join('\n') + '\ndone' : 'done')
+}
+init().catch((e) => { log('error: ' + String(e && e.stack ? e.stack : e)); document.title = 'error' })
+</script>
+</body>
+</html>

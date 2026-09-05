@@ -11,7 +11,7 @@ import {
   Skin,
   SpineCanvas
 } from '@esotericsoftware/spine-webgl'
-import type { TextureAtlas } from '@esotericsoftware/spine-webgl'
+import type { TextureAtlas, TrackEntry } from '@esotericsoftware/spine-webgl'
 import type { PetPack, PetWindowState } from '../../shared/types'
 import { CLICK_EXCLUDED_ANIMATIONS } from '../../shared/animation-pool'
 import type { PetHitTest, PetVisualBounds } from './PetVisual'
@@ -44,14 +44,35 @@ interface CanvasSourceBounds {
 }
 const SURF_EXIT_END_SECONDS = 2.8333
 const SURF_RETURN_START_SECONDS = 3.3333
-const SURF_RETURN_END_SECONDS = 6.129
-const SURF_DISMOUNT_START_SECONDS = 8.0833
+// 切点由"刹车初速=切点速度"连续条件解出：bone.translate 单段贝塞尔（控制点 t=3.379/8.19）
+// 满足 x(t_c) + v(t_c)·T/3 = 1731.47（世界 x≈0 的原地 timeline 值）。
+// T=0.6s 缓刹：该区间贝塞尔近线性 v≈1292，x(t_c)=−256 → t_c=5.952，D=v·T/3=260
+const SURF_RETURN_END_SECONDS = 5.952
+// 刹车借用出场段"落板站稳"切片 raw 1.2333→1.8333（板全亮、无跳起动作），程序化减速叠加在 root 上；
+// 旧方案用 0.8333→1.2333（空中落板片段）会观感成"又跳上一次板"
+const SURF_BRAKE_START_SECONDS = 1.2333
+const SURF_BRAKE_END_SECONDS = 1.8333
+const SURF_BRAKE_SECONDS = SURF_BRAKE_END_SECONDS - SURF_BRAKE_START_SECONDS
+// 滑行段 root.translate y=18.97 只在 raw≥3.3333 生效（整体抬高），站稳/下板切片没有；
+// 刹车起步把 worldY 从切片原生的 50.2 拉回切点的 68.3，随减速收敛到 50.2+18.97 抬升
+const SURF_BRAKE_Y_ALIGN_UNITS = 68.3 - 50.2
+const SURF_ROOT_LIFT_UNITS = 18.97
+// 下板倒放：reverse 采样 raw = 9.3333−(start+trackTime)，从 raw 1.6333 倒放到 0——
+// 与刹车末帧同帧无缝，自带"下蹲蓄力→起跳→落地"完整下板动作
+const SURF_DISMOUNT_START_SECONDS = 9.3333 - SURF_BRAKE_END_SECONDS
 const SURF_DISMOUNT_END_SECONDS = 9.3333
+const SURF_DISMOUNT_SECONDS = SURF_DISMOUNT_END_SECONDS - SURF_DISMOUNT_START_SECONDS
+const SURF_BRAKE_SLOT_ALPHA = '鲨鱼'
+// 刹车终点的世界坐标 = 刹车切片原生位置（bone 局部 x/y 常数，root 回 setup 后的世界值）
+const SURF_BRAKE_REST_X_UNITS = 3.61
+const SURF_BRAKE_REST_Y_UNITS = 69.17 // 切片原生 50.2 + 滑行抬升 18.97
 const SURF_EXIT_TO_ENTER_GAP_SECONDS = 0
 const SURF_ENTER_DELAY_SECONDS =
   SURF_EXIT_END_SECONDS + SURF_EXIT_TO_ENTER_GAP_SECONDS
 const SURF_RETURN_DURATION_SECONDS =
   SURF_RETURN_END_SECONDS - SURF_RETURN_START_SECONDS
+// 刹车程序化位移总量 = 世界原地 x(1731.47) − 切点 x(t_c)，与 T 内 ease-out 减速匹配
+const SURF_BRAKE_OFFSET_X_UNITS = 178
 const EYE_SLOT_NAMES = [
   '上弯闭目',
   '下睫毛',
@@ -62,6 +83,14 @@ const EYE_SLOT_NAMES = [
   '高光'
 ]
 
+interface SurfBrakeState {
+  brakeEntry: TrackEntry
+  dismountEntry: TrackEntry
+  elapsed: number
+  phase: 'brake' | 'dismount'
+  x0: number
+  y0: number
+}
 interface SpineRuntime {
   skeleton: Skeleton
   state: AnimationState
@@ -71,6 +100,7 @@ interface SpineRuntime {
   currentAnimationName: string
   swayTime: number
   dropSpringTime: number | null
+  surfBrake: SurfBrakeState | null
   baseRootRotation: number
   baseRootScaleX: number
   baseRootScaleY: number
@@ -131,6 +161,76 @@ function applyStructuralDropSpring(runtime: SpineRuntime, delta: number): void {
     rootBone.scaleY = runtime.baseRootScaleY
     setDragExpression(runtime.skeleton, false)
   }
+}
+
+function applySurfBrake(runtime: SpineRuntime, delta: number): void {
+  const brake = runtime.surfBrake
+  if (!brake) return
+  const current = runtime.state.getCurrent(0)
+
+  // 刹车条目：仍在队列则等待；被下板条目接管则切相位；被其他打断则清理
+  if (brake.phase === 'brake') {
+    if (current !== brake.brakeEntry) {
+      if (current === brake.dismountEntry) {
+        brake.phase = 'dismount'
+        brake.elapsed = 0
+      } else {
+        let queued: TrackEntry | null = current
+        while (queued && queued !== brake.brakeEntry) queued = queued.next
+        if (queued !== brake.brakeEntry) runtime.surfBrake = null
+        return
+      }
+    } else {
+      brake.elapsed += delta
+      const progress = Math.min(1, brake.elapsed / SURF_BRAKE_SECONDS)
+      const ease = 1 - Math.pow(1 - progress, 3)
+      const rootBone = runtime.skeleton.getRootBone()
+      const bone = runtime.skeleton.findBone('bone')
+      if (rootBone && bone) {
+        if (Number.isNaN(brake.x0)) {
+          // 首帧记录实际世界位置作为 pin 起点（兼容 mixDuration 过渡）
+          brake.x0 = bone.worldX
+          brake.y0 = bone.worldY
+        }
+        // pin 式补偿：目标轨迹 x0/y0 → rest 的 ease-out 减速线（p=0 在切点、p=1 在原地）。
+        // apply 已把 root/bone 重置为本帧原生局部值（简单平移，无旋转缩放），
+        // 按目标与原生之差叠加，mix 姿态过渡不影响位置精度
+        const targetX = brake.x0 + (SURF_BRAKE_REST_X_UNITS - brake.x0) * ease
+        const targetY = brake.y0 + (SURF_BRAKE_REST_Y_UNITS - brake.y0) * ease
+        const nativeX = rootBone.x + bone.x
+        const nativeY = runtime.baseSkeletonY + rootBone.y + bone.y
+        rootBone.x += targetX - nativeX
+        rootBone.y += targetY - nativeY
+      }
+      // 借用切片段内板本来就全亮，仍强制兜底避免帧边界闪没
+      const boardSlot = runtime.skeleton.findSlot(SURF_BRAKE_SLOT_ALPHA)
+      if (boardSlot) boardSlot.color.a = 1
+      if (progress >= 1) {
+        brake.phase = 'dismount'
+        brake.elapsed = 0
+      }
+      return
+    }
+  }
+
+  // 下板倒放段：延续滑行抬升，落地段（progress 0.45→0.61）线性淡出；
+  // 板在人起跳后即淡出（progress 0.3→0.5）：素材固有轨道里跳跃时板留在水面，
+  // 淡出与正放"板在人落板途中淡入"对称，避免顶点附近人板分离画面
+  if (current !== brake.dismountEntry) {
+    runtime.surfBrake = null
+    return
+  }
+  brake.elapsed += delta
+  const progress = Math.min(1, brake.elapsed / SURF_DISMOUNT_SECONDS)
+  const liftFade = 1 - Math.min(1, Math.max(0, (progress - 0.45) / 0.16))
+  const rootBone = runtime.skeleton.getRootBone()
+  if (rootBone) rootBone.y += SURF_ROOT_LIFT_UNITS * liftFade
+  const boardSlot = runtime.skeleton.findSlot(SURF_BRAKE_SLOT_ALPHA)
+  if (boardSlot) {
+    boardSlot.color.a = progress < 0.3 ? 1 : Math.max(0, 1 - (progress - 0.3) / 0.2)
+  }
+
+  if (progress >= 1) runtime.surfBrake = null
 }
 
 function getOpaqueCanvasBounds(
@@ -209,16 +309,31 @@ function playSurfSequence(runtime: SpineRuntime): void {
   returnEntry.animationEnd = SURF_RETURN_END_SECONDS
   returnEntry.mixDuration = 0
 
+  const brakeEntry = state.addAnimation(0, '冲浪', false, SURF_RETURN_DURATION_SECONDS)
+  brakeEntry.animationStart = SURF_BRAKE_START_SECONDS
+  brakeEntry.animationEnd = SURF_BRAKE_END_SECONDS
+  // 0.12s 姿态混合柔化滑回→刹车的瞬切；位置由 applySurfBrake 的 pin 式补偿保证连续
+  brakeEntry.mixDuration = 0.12
+
   const dismountEntry = state.addAnimation(
     0,
     '冲浪',
     false,
-    SURF_RETURN_DURATION_SECONDS
+    SURF_BRAKE_SECONDS
   )
   dismountEntry.animationStart = SURF_DISMOUNT_START_SECONDS
   dismountEntry.animationEnd = SURF_DISMOUNT_END_SECONDS
   dismountEntry.reverse = true
   dismountEntry.mixDuration = 0
+
+  runtime.surfBrake = {
+    brakeEntry,
+    dismountEntry,
+    elapsed: 0,
+    phase: 'brake',
+    x0: NaN,
+    y0: NaN
+  }
 }
 
 export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, onHitTestReady }: SpinePetVisualProps) {
@@ -288,6 +403,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
             currentAnimationName: '',
             swayTime: 0,
             dropSpringTime: null,
+            surfBrake: null,
             baseRootRotation,
             baseRootScaleX,
             baseRootScaleY,
@@ -295,6 +411,19 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
           }
 
           if (!disposed) setReady(true)
+
+          // dev 调试钩子：forceSurf=1 时加载后播放冲浪序列（用于端到端视觉验收）
+          if (
+            !disposed &&
+            new URLSearchParams(window.location.search).get('forceSurf') === '1'
+          ) {
+            window.setTimeout(() => {
+              const rt = runtimeRef.current
+              if (!rt) return
+              rt.currentAction = 'surf'
+              playSurfSequence(rt)
+            }, 2000)
+          }
         },
         update(canvas, delta) {
           const runtime = runtimeRef.current
@@ -315,6 +444,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
             setDragExpression(runtime.skeleton, true)
           }
           applyStructuralDropSpring(runtime, delta)
+          applySurfBrake(runtime, delta)
           runtime.skeleton.updateWorldTransform(Physics.update)
         },
         render(canvas) {
@@ -377,6 +507,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
         runtime.state.setAnimation(0, ACTION_ANIMATIONS['drag'], false)
       }
       runtime.dropSpringTime = null
+      runtime.surfBrake = null
       return
     }
     if (state.action === 'idle' && runtime.currentAction === 'drag') {
@@ -408,6 +539,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
     if (state.action === 'click') {
       runtime.state.clearTrack(0)
       runtime.skeleton.setToSetupPose()
+      runtime.surfBrake = null
     }
     if (runtime.currentAction === state.action) {
       if (state.action === 'click' || state.animationName || !loop) {

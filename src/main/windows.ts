@@ -11,10 +11,16 @@ const PET_UI_MIN_VERTICAL_MARGIN = 300
 function loadRenderer(win: BrowserWindow, windowName: string, tab?: string): void {
   const devUrl = process.env['ELECTRON_RENDERER_URL']
   if (devUrl) {
-    void win.loadURL(`${devUrl}/?window=${windowName}${tab ? `&tab=${tab}` : ''}`)
+    const forceSurf =
+      process.env['SURF_TEST'] === '1' && windowName === 'pet' ? '&forceSurf=1' : ''
+    void win.loadURL(`${devUrl}/?window=${windowName}${tab ? `&tab=${tab}` : ''}${forceSurf}`)
   } else {
     void win.loadFile(join(__dirname, '../renderer/index.html'), {
-      query: { window: windowName, ...(tab ? { tab } : {}) }
+      query: {
+        window: windowName,
+        ...(tab ? { tab } : {}),
+        ...(process.env['SURF_TEST'] === '1' && windowName === 'pet' ? { forceSurf: '1' } : {})
+      }
     })
   }
 }
