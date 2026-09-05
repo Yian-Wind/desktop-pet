@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { PetEvent, PetPack, PetWindowState } from '../../shared/types'
+import type { AppConfig, PetEvent, PetPack, PetWindowState } from '../../shared/types'
 
 const DRAG_THRESHOLD_PX = 4
 
 export function usePet() {
   const [pack, setPack] = useState<PetPack | null>(null)
   const [state, setState] = useState<PetWindowState | null>(null)
-  const [blinkIntervalSeconds, setBlinkIntervalSeconds] = useState(4)
+  const [config, setConfig] = useState<AppConfig | null>(null)
   const packListRef = useRef<PetPack[]>([])
   const pointerDownRef = useRef(false)
   const draggingRef = useRef(false)
@@ -25,7 +25,7 @@ export function usePet() {
       if (!disposed) {
         setPack(current ?? null)
         setState(petState)
-        setBlinkIntervalSeconds(config.spine.blinkIntervalSeconds)
+        setConfig(config)
       }
     }
     void init()
@@ -37,7 +37,7 @@ export function usePet() {
       })
     })
     const unsubscribeConfig = window.petApi.onConfigChanged((next) => {
-      setBlinkIntervalSeconds(next.spine.blinkIntervalSeconds)
+      setConfig(next)
     })
     return () => {
       disposed = true
@@ -47,9 +47,25 @@ export function usePet() {
   }, [])
 
   const adapterLabel = useMemo(() => pack?.manifest.type ?? 'gif', [pack])
+  const blinkIntervalSeconds = config?.spine.blinkIntervalSeconds ?? 4
+  const hasCoat = Boolean(pack?.assets['coat'])
+  const coatOn = useMemo(
+    () => Boolean(pack && config?.coatStates?.[pack.manifest.id]),
+    [pack, config]
+  )
 
   function sendEvent(event: PetEvent) {
     void window.petApi.sendPetEvent(event)
+  }
+
+  function toggleCoat() {
+    const packId = pack?.manifest.id
+    if (!packId) return
+    setConfig((prev) => {
+      const next = { ...(prev ?? {} as AppConfig), coatStates: { ...(prev?.coatStates ?? {}), [packId]: !coatOn } } as AppConfig
+      return next
+    })
+    void window.petApi.setCoatOn(packId, !coatOn)
   }
 
   function onPointerDown(event: React.PointerEvent) {
@@ -92,8 +108,20 @@ export function usePet() {
   }
 
   function onPointerClick(_event: React.MouseEvent) {
-    if (!movedRef.current) sendEvent({ type: 'click' })
+    if (movedRef.current) return
+    sendEvent({ type: 'click' })
+    if (hasCoat) toggleCoat()
   }
 
-  return { pack, state, adapterLabel, blinkIntervalSeconds, onPointerDown, onPointerMove, onPointerUp, onPointerClick }
+  return {
+    pack,
+    state,
+    adapterLabel,
+    blinkIntervalSeconds,
+    coatOn,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    onPointerClick
+  }
 }

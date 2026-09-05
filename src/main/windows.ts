@@ -31,11 +31,17 @@ export function createPetWindow(position: { x: number; y: number; scale: number 
   const margins = getPetMarginsForStage(stageSize)
   const windowWidth = Math.round(stageSize + margins.horizontal * 2)
   const windowHeight = Math.round(stageSize + margins.vertical * 2)
+  // A persisted position can point off-screen (resolution/monitor changes,
+  // stale config); clamp the stage back into the visible work area.
+  const maxStageX = Math.max(0, width - stageSize)
+  const maxStageY = Math.max(0, height - stageSize)
+  const stageX = Math.min(Math.max(position.x || width - stageSize - 40, 0), maxStageX)
+  const stageY = Math.min(Math.max(position.y || height - stageSize - 40, 0), maxStageY)
   const win = new BrowserWindow({
     width: windowWidth,
     height: windowHeight,
-    x: (position.x || width - stageSize - 40) - margins.horizontal,
-    y: (position.y || height - stageSize - 40) - margins.vertical,
+    x: stageX - margins.horizontal,
+    y: stageY - margins.vertical,
     transparent: true,
     frame: false,
     alwaysOnTop: true,

@@ -13,6 +13,7 @@ export const IPC = {
   PET_DROP: 'pet:drop',
   PET_SET_CLICK_THROUGH: 'pet:set-click-through',
   PET_SET_SIZE: 'pet:set-size',
+  COAT_SET: 'coat:set',
   PET_CONTEXT_MENU: 'pet:context-menu',
   PET_ALARM_SCHEDULE: 'pet:alarm-schedule',
   CHAT_SEND: 'chat:send',

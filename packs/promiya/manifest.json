@@ -1,0 +1,15 @@
+{
+  "id": "promiya",
+  "name": "Promiya",
+  "version": "0.1.0",
+  "type": "gif",
+  "animations": [],
+  "defaultScale": 0.42,
+  "floating": true,
+  "author": "user",
+  "assetPaths": {
+    "sprite": "assets/nocoat.png",
+    "spriteEyeclosed": "assets/nocoat_eyeclosed.png",
+    "coat": "assets/coat_overlay.png"
+  }
+}

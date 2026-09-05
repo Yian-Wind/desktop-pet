@@ -22,6 +22,7 @@ export interface PetApi {
   movePet: (x: number, y: number) => void
   dropPet: () => Promise<void>
   setPetSize: (scale: number, packId?: string) => Promise<void>
+  setCoatOn: (packId: string, on: boolean) => Promise<AppConfig>
   setPetClickThrough: (ignore: boolean) => Promise<void>
   showContextMenu: () => Promise<void>
   scheduleAlarm: (minutes: number) => Promise<void>

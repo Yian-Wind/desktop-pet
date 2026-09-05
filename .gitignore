@@ -24,3 +24,10 @@ pet_reference/
 tools/vendor/
 spine-reference*.png
 packs/**/*.json.bak
+
+# Python tools
+__pycache__/
+*.pyc
+
+# ZCode session
+.zcode/

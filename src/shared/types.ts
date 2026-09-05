@@ -18,6 +18,7 @@ export interface PetPackManifest {
   type: PetPackType
   animations: string[]
   defaultScale?: number
+  floating?: boolean
   author?: string
   persona?: PersonaConfig
   assetPaths?: Record<string, string>
@@ -74,6 +75,7 @@ export interface AppConfig {
   currentPackId: string
   petPosition: { x: number; y: number }
   petScales: Record<string, number>
+  coatStates: Record<string, boolean>
   spine: {
     blinkIntervalSeconds: number
     sleepAnimationIntervalSeconds: number

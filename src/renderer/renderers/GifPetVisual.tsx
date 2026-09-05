@@ -13,6 +13,7 @@ interface SourceBounds {
 interface GifPetVisualProps {
   pack: PetPack
   state: PetWindowState
+  coatOn?: boolean
   hitTestRef: RefObject<PetHitTest | null>
   onHitTestReady?: () => void
 }
@@ -78,15 +79,33 @@ function getVisualBounds(image: HTMLImageElement, sourceBounds: SourceBounds): P
   return { left, top, width, height, centerX: left + width / 2, centerY: top + height / 2 }
 }
 
-export function GifPetVisual({ pack, state, hitTestRef, onHitTestReady }: GifPetVisualProps) {
+export function GifPetVisual({ pack, state, coatOn, hitTestRef, onHitTestReady }: GifPetVisualProps) {
   const imageRef = useRef<HTMLImageElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const sourceBoundsRef = useRef<SourceBounds | null>(null)
   const [imageLoaded, setImageLoaded] = useState(false)
   const sprite = pack.assets['sprite']
-  const url = `pet-asset://pack/${sprite}`
+  const spriteEyeclosed = pack.assets['spriteEyeclosed']
+  const coat = pack.assets['coat']
+  const hasCoat = Boolean(coat)
+  const baseUrl = `pet-asset://pack/${sprite}`
+  const eyeclosedUrl = spriteEyeclosed ? `pet-asset://pack/${spriteEyeclosed}` : null
+  const coatUrl = coat ? `pet-asset://pack/${coat}` : null
+  const dragging = state.action === 'drag'
+  const src = dragging && eyeclosedUrl ? eyeclosedUrl : baseUrl
 
   useEffect(() => {
+    // Warm the variant caches so toggling (drag eyes, coat) never flashes.
+    for (const url of [eyeclosedUrl, coatUrl]) {
+      if (!url) continue
+      const image = new Image()
+      image.crossOrigin = 'anonymous'
+      image.src = url
+    }
+  }, [eyeclosedUrl, coatUrl])
+
+  useEffect(() => {
+    if (hasCoat) return
     if (state.action !== 'click') return
     const image = imageRef.current
     if (!image) return
@@ -100,7 +119,7 @@ export function GifPetVisual({ pack, state, hitTestRef, onHitTestReady }: GifPet
       { duration: 500, easing: 'ease' }
     )
     return () => animation.cancel()
-  }, [state.action, state.actionNonce])
+  }, [state.action, state.actionNonce, hasCoat])
 
   useEffect(() => {
     return () => {
@@ -171,15 +190,46 @@ export function GifPetVisual({ pack, state, hitTestRef, onHitTestReady }: GifPet
     onHitTestReady?.()
   }
 
+  // Float continuously except while being dragged or asleep; the behavior
+  // engine only returns to 'idle' on its minute tick, so gating on 'idle'
+  // alone would pause the float for up to a minute after any click.
+  const floating = Boolean(pack.manifest.floating) && state.action !== 'drag' && state.action !== 'sleep'
+  const actionClass = `pet-sprite pet-sprite--${state.action} pet-sprite--${state.emotion}${imageLoaded ? '' : ' pet-sprite--loading'}${floating ? ' pet-sprite--float' : ''}`
+
+  if (!coatUrl) {
+    return (
+      <img
+        ref={imageRef}
+        className={actionClass}
+        src={src}
+        alt={pack.manifest.name}
+        crossOrigin="anonymous"
+        draggable={false}
+        onLoad={handleImageLoad}
+      />
+    )
+  }
+
   return (
-    <img
-      ref={imageRef}
-      className={`pet-sprite pet-sprite--${state.action} pet-sprite--${state.emotion}${imageLoaded ? '' : ' pet-sprite--loading'}`}
-      src={url}
-      alt={pack.manifest.name}
-      crossOrigin="anonymous"
-      draggable={false}
-      onLoad={handleImageLoad}
-    />
+    <div className={actionClass}>
+      <img
+        ref={imageRef}
+        className="pet-sprite-layer"
+        src={src}
+        alt={pack.manifest.name}
+        crossOrigin="anonymous"
+        draggable={false}
+        onLoad={handleImageLoad}
+      />
+      {coatOn ? (
+        <img
+          className="pet-sprite-layer pet-sprite-layer--coat"
+          src={coatUrl}
+          alt=""
+          crossOrigin="anonymous"
+          draggable={false}
+        />
+      ) : null}
+    </div>
   )
 }

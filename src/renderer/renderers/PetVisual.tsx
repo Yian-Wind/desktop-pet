@@ -21,11 +21,12 @@ interface PetVisualProps {
   pack: PetPack
   state: PetWindowState
   blinkIntervalSeconds: number
+  coatOn?: boolean
   hitTestRef: RefObject<PetHitTest | null>
   onHitTestReady?: () => void
 }
 
-export function PetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, onHitTestReady }: PetVisualProps) {
+export function PetVisual({ pack, state, blinkIntervalSeconds, coatOn, hitTestRef, onHitTestReady }: PetVisualProps) {
   if (pack.manifest.type === 'spine') {
     return (
       <SpinePetVisual
@@ -50,6 +51,7 @@ export function PetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, onHit
     <GifPetVisual
       pack={pack}
       state={state}
+      coatOn={coatOn}
       hitTestRef={hitTestRef}
       onHitTestReady={onHitTestReady}
     />

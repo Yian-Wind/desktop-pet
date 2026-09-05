@@ -155,6 +155,15 @@ export function registerIpcHandlers(
     if (targetPackId === config.get().currentPackId) setPetScale(scale)
   })
 
+  ipcMain.handle(IPC.COAT_SET, (_event, packId: string, on: boolean) => {
+    const cfg = config.get()
+    if (typeof on !== 'boolean') return config.get()
+    config.save({ ...cfg, coatStates: { ...cfg.coatStates, [packId]: on } })
+    const saved = config.get()
+    sendToPet(IPC.CONFIG_CHANGED, saved)
+    return saved
+  })
+
   ipcMain.handle(IPC.PET_CONTEXT_MENU, (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     if (!win) return

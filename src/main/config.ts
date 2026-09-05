@@ -9,6 +9,7 @@ const DEFAULT_CONFIG: AppConfig = {
   currentPackId: 'fairy',
   petPosition: { x: 100, y: 100 },
   petScales: {},
+  coatStates: {},
   spine: { blinkIntervalSeconds: 4, sleepAnimationIntervalSeconds: 30 },
   reminders: { enabled: true, minIntervalMinutes: 30, startHour: 9, endHour: 22 },
   autostart: false,
@@ -64,6 +65,10 @@ export class ConfigStore {
     if (oldPetPosition?.scale !== undefined && Number.isFinite(oldPetPosition.scale) && petScales[currentPackId] === undefined) {
       petScales[currentPackId] = oldPetPosition.scale
     }
+    const coatStates: Record<string, boolean> = {}
+    for (const [packId, on] of Object.entries(raw.coatStates ?? {})) {
+      if (typeof on === 'boolean') coatStates[packId] = on
+    }
     const baseFiles = oldObsidian?.baseFiles && oldObsidian.baseFiles.length > 0
       ? oldObsidian.baseFiles
       : oldObsidian?.baseFile
@@ -79,6 +84,7 @@ export class ConfigStore {
         y: oldPetPosition?.y ?? DEFAULT_CONFIG.petPosition.y
       },
       petScales,
+      coatStates,
       spine: {
         blinkIntervalSeconds: Number.isFinite(raw.spine?.blinkIntervalSeconds)
           ? Math.min(10, Math.max(1, Number(raw.spine?.blinkIntervalSeconds)))

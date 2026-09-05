@@ -7,7 +7,7 @@ import type { PetHitTest, PetVisualBounds } from '../renderers/PetVisual'
 const quickActionHideDelayMs = 240
 
 export function PetWindow() {
-  const { pack, state, blinkIntervalSeconds, onPointerDown, onPointerMove, onPointerUp, onPointerClick } = usePet()
+  const { pack, state, blinkIntervalSeconds, coatOn, onPointerDown, onPointerMove, onPointerUp, onPointerClick } = usePet()
   const hitTestRef = useRef<PetHitTest | null>(null)
   const clickThroughRef = useRef(false)
   const pointerDownRef = useRef(false)
@@ -321,6 +321,7 @@ export function PetWindow() {
           pack={pack}
           state={state}
           blinkIntervalSeconds={blinkIntervalSeconds}
+          coatOn={coatOn}
           hitTestRef={hitTestRef}
           onHitTestReady={handleHitTestReady}
         />
