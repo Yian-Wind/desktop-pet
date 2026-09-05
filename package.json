@@ -2,12 +2,38 @@
   "name": "desktop-pet",
   "version": "0.1.0",
   "description": "Windows desktop companion pet with skill bus and Live2D-ready pet packs",
+  "author": "Yian-Wind",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json"
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "dist": "electron-vite build && electron-builder --win zip"
+  },
+  "build": {
+    "appId": "com.desktop-pet.desktop-pet",
+    "productName": "Desktop Pet",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "packs/**/*",
+      "resources/**/*"
+    ],
+    "asar": false,
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    }
   },
   "dependencies": {
     "@esotericsoftware/spine-canvas": "4.2.120",
@@ -25,6 +51,7 @@
     "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react": "^5.0.4",
     "electron": "^44.0.0",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "typescript": "^7.0.2",
     "vite": "^7.3.6"

@@ -14,7 +14,20 @@ Windows 桌面陪伴宠物。核心是“陪伴感”，AI 对话与 Obsidian �
 - ObsidianBaseService：解析 `.base` filters、扫描 Markdown 待办、frontmatter 读写
 - 设计/开发文档位于 `docs/`（`DESIGN.md`、`ROADMAP.md`）
 
-## 运行
+## 下载安装（新电脑推荐）
+
+无需 Node.js 环境，直接从 GitHub Releases 下载打包好的程序：
+
+1. 打开 [Releases 页面](https://github.com/Yian-Wind/desktop-pet/releases/latest)
+2. 下载 `Desktop-Pet-x.y.z-win.zip`（`x.y.z` 为版本号）
+3. 解压到任意目录，双击 `Desktop Pet.exe` 运行
+4. 宠物会出现在桌面，托盘图标可打开面板或退出
+
+> 首次运行如遇 Windows SmartScreen 提示，点击「更多信息 → 仍要运行」（程序未做代码签名）。
+
+配置（API、Obsidian 库路径等）保存在 `%APPDATA%/desktop-pet/`，换电脑后在新机上重新配置一次即可。
+
+## 运行（开发方式）
 
 ```powershell
 npm install
@@ -28,6 +41,16 @@ npm run typecheck
 npm run build
 npm start
 ```
+
+## 打包发布
+
+维护者发布新版本时：
+
+```powershell
+npm run dist
+```
+
+产出 `release/Desktop Pet-x.y.z-win.zip`，然后更新 `package.json` 的 `version`、打 tag（如 `v0.1.1`）并在 GitHub Releases 上传该 zip。
 
 ## Pet Pack
 
