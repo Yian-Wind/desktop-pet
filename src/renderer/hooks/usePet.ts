@@ -109,6 +109,11 @@ export function usePet() {
 
   function onPointerClick(_event: React.MouseEvent) {
     if (movedRef.current) return
+    // A sleeping pet wakes up when poked instead of silently ignoring clicks.
+    if (state?.action === 'sleep') {
+      sendEvent({ type: 'wake' })
+      return
+    }
     sendEvent({ type: 'click' })
     if (hasCoat) toggleCoat()
   }

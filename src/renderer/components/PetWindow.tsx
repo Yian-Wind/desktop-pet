@@ -51,6 +51,18 @@ export function PetWindow() {
     }
   }, [])
 
+  // Backstops for drags whose pointerup never reaches the pet root (released
+  // outside the window, over another app, or during a focus change).
+  useEffect(() => {
+    const endDrag = () => endDragWithoutEvent()
+    window.addEventListener('blur', endDrag)
+    document.addEventListener('pointerup', endDrag)
+    return () => {
+      window.removeEventListener('blur', endDrag)
+      document.removeEventListener('pointerup', endDrag)
+    }
+  })
+
   if (!pack || !state) {
     return <div className="pet-loading">loading</div>
   }
@@ -154,6 +166,15 @@ export function PetWindow() {
 
   function handlePointerMove(event: React.PointerEvent) {
     if (pointerDownRef.current) {
+      // A pointerup can be lost entirely when the cursor leaves the window
+      // mid-drag (e.g. dragging against the screen-edge clamp). A move with no
+      // buttons pressed means the drag is over — finish it instead of gluing
+      // the pet to the cursor forever.
+      if (event.buttons === 0) {
+        finishPointerDrag(event)
+        return
+      }
+      applyPetClickThrough(false)
       setQuickActionsVisible(false)
       setAlarmEditorVisible(false)
       onPointerMove(event)
@@ -190,11 +211,20 @@ export function PetWindow() {
   function finishPointerDrag(event: React.PointerEvent) {
     if (!pointerDownRef.current) return
     pointerDownRef.current = false
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
     updateClickThrough(event, true)
     onPointerUp(event)
+  }
+
+  function endDragWithoutEvent(): void {
+    // Backstop for a lost pointerup outside the window: clear the stuck drag
+    // state and make the window clickable again.
+    if (!pointerDownRef.current) return
+    pointerDownRef.current = false
+    applyPetClickThrough(false)
+    onPointerUp({} as React.PointerEvent)
   }
 
   function handlePointerClick(event: React.MouseEvent) {
