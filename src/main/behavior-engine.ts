@@ -193,6 +193,11 @@ export class BehaviorEngine {
 
   private hideBubble(): void {
     this.state.bubbleVisible = false
+    // cheer/alarm reactions exist for their bubble; once it hides the pet
+    // returns to idle so sprite reactions (e.g. Promeia's closed eyes) reset.
+    if (this.state.action === 'cheer' || this.state.action === 'alarm') {
+      this.state.action = 'idle'
+    }
     this.emit()
   }
 
