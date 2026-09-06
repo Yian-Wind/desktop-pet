@@ -21,6 +21,9 @@ export function PetWindow() {
   const [alarmMinutes, setAlarmMinutes] = useState('5')
 
   function applyPetClickThrough(ignore: boolean): void {
+    // Never drop into click-through mid-drag: setIgnoreMouseEvents(true) breaks
+    // the active pointer capture and the pet "falls off" the cursor.
+    if (ignore && pointerDownRef.current) return
     if (clickThroughRef.current === ignore) return
     clickThroughRef.current = ignore
     void window.petApi.setPetClickThrough(ignore)
