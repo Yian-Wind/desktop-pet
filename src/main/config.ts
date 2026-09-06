@@ -165,6 +165,12 @@ export class ConfigStore {
   }
 
   save(cfg: AppConfig): void {
+    // A malformed save (null/partial object from a buggy caller) must never
+    // reach merge(): it would silently reset the user's vault, todo bases and
+    // API settings to defaults. Require the structural minimum instead.
+    if (!cfg || typeof cfg !== 'object' || !cfg.obsidian || !cfg.todo || !cfg.api) {
+      throw new Error('Invalid config: refusing to save a null/partial object')
+    }
     this.config = this.merge(cfg)
     this.setApiConfig(cfg.api)
     const toSave = { ...this.config, api: { ...this.config.api, apiKey: '' } }
