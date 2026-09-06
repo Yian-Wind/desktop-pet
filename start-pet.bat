@@ -3,7 +3,9 @@ chcp 65001 >nul
 title Desktop Pet
 cd /d "%~dp0"
 
-if not exist node_modules (
+set "PET_EXE=%~dp0node_modules\electron\dist\electron.exe"
+
+if not exist "%PET_EXE%" (
   echo First run: installing dependencies...
   call npm install
   if errorlevel 1 (
@@ -14,17 +16,19 @@ if not exist node_modules (
   )
 )
 
-set "PET_EXE=%~dp0node_modules\electron\dist\electron.exe"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq $env:PET_EXE }) { exit 0 } else { exit 1 }"
-if not errorlevel 1 (
-  echo Desktop Pet is already running.
-  pause
-  exit /b 0
+if not exist out\main\index.js (
+  echo Building app...
+  call npm run build
+  if errorlevel 1 (
+    echo.
+    echo Build failed.
+    pause
+    exit /b 1
+  )
 )
 
-echo Starting Desktop Pet...
-call npm run dev
-
-echo.
-echo Pet stopped.
-pause
+:: electron.exe is a GUI-subsystem binary: `start` returns immediately and this
+:: console exits, so no lingering cmd windows. Launching while the pet is
+:: already running is safe - the app's single-instance lock focuses the
+:: existing pet and the new process exits silently.
+start "" "%PET_EXE%" .
