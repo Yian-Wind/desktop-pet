@@ -190,10 +190,10 @@ export function GifPetVisual({ pack, state, coatOn, hitTestRef, onHitTestReady }
     onHitTestReady?.()
   }
 
-  // Float continuously except while being dragged or asleep; the behavior
-  // engine only returns to 'idle' on its minute tick, so gating on 'idle'
-  // alone would pause the float for up to a minute after any click.
-  const floating = Boolean(pack.manifest.floating) && state.action !== 'drag' && state.action !== 'sleep'
+  // Float continuously except while being dragged; the behavior engine only
+  // returns to 'idle' on its minute tick, so gating on 'idle' alone would
+  // pause the float for up to a minute after any click (and all through sleep).
+  const floating = Boolean(pack.manifest.floating) && state.action !== 'drag'
   const actionClass = `pet-sprite pet-sprite--${state.action} pet-sprite--${state.emotion}${imageLoaded ? '' : ' pet-sprite--loading'}${floating ? ' pet-sprite--float' : ''}`
 
   if (!coatUrl) {
