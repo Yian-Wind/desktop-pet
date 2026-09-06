@@ -91,8 +91,10 @@ export function GifPetVisual({ pack, state, coatOn, hitTestRef, onHitTestReady }
   const baseUrl = `pet-asset://pack/${sprite}`
   const eyeclosedUrl = spriteEyeclosed ? `pet-asset://pack/${spriteEyeclosed}` : null
   const coatUrl = coat ? `pet-asset://pack/${coat}` : null
-  const dragging = state.action === 'drag'
-  const src = dragging && eyeclosedUrl ? eyeclosedUrl : baseUrl
+  // Closed-eyes image shows while dragging and when reacting to quick actions
+  // (todo/memo recommendation, alarm set).
+  const eyesClosed = state.action === 'drag' || state.action === 'cheer' || state.action === 'alarm'
+  const src = eyesClosed && eyeclosedUrl ? eyeclosedUrl : baseUrl
 
   useEffect(() => {
     // Warm the variant caches so toggling (drag eyes, coat) never flashes.
