@@ -135,11 +135,14 @@ export function GifPetVisual({ pack, state, coatOn, hitTestRef, onHitTestReady }
   function handleImageLoad(event: React.SyntheticEvent<HTMLImageElement>): void {
     const image = event.currentTarget
     imageRef.current = image
-    // The hit test is wired once from the base sprite; a mid-drag src swap to
+    // The hit test is wired once per sprite INSTANCE: a mid-drag src swap to
     // the closed-eyes variant fires onLoad again, and re-running the wiring
     // would re-emit onHitTestReady — which enables click-through MID-DRAG,
     // breaking pointer capture and making the pet "slip out of the hand".
-    if (canvasRef.current && sourceBoundsRef.current) return
+    // Guard on the wired hitTest, not the canvas: a half-initialized state
+    // (canvas set, bounds missing) must still (re)wire, or the hit test stays
+    // stale forever and the window can get stuck click-through.
+    if (hitTestRef.current) return
     const canvas = document.createElement('canvas')
     canvas.width = image.naturalWidth
     canvas.height = image.naturalHeight

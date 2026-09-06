@@ -3,6 +3,7 @@ import { join } from 'node:path'
 
 let petWindow: BrowserWindow | null = null
 let panelWindow: BrowserWindow | null = null
+let cursorWatchTimer: ReturnType<typeof setInterval> | null = null
 
 const PET_BASE_SIZE = 320
 const PET_UI_MARGIN_RATIO = 0.58
@@ -83,8 +84,41 @@ export function createPanelWindow(tab?: 'chat' | 'todos' | 'settings'): BrowserW
   return win
 }
 
-export function getPetWindow(): BrowserWindow | null {
-  return petWindow
+export function setPetClickThrough(ignore: boolean): void {
+  const win = petWindow
+  if (!win || win.isDestroyed()) return
+  win.setIgnoreMouseEvents(ignore, { forward: true })
+  // The forward:true mouse-move relaying is unreliable on transparent
+  // frameless windows, so a click-through window can get stuck ignoring the
+  // cursor forever. Watch the global cursor from the main process and push
+  // its position to the renderer, which runs the same pixel hit test and
+  // clears click-through when it lands on the pet.
+  if (ignore && !cursorWatchTimer) {
+    cursorWatchTimer = setInterval(() => {
+      const w = petWindow
+      if (!w || w.isDestroyed()) {
+        stopCursorWatch()
+        return
+      }
+      const cursor = screen.getCursorScreenPoint()
+      // getCursorScreenPoint, getBounds and the renderer's window.screenX all
+      // report the same coordinate space on this setup - subtract directly.
+      const bounds = w.getBounds()
+      const clientX = cursor.x - bounds.x
+      const clientY = cursor.y - bounds.y
+      if (!w.webContents.isDestroyed()) {
+        w.webContents.send('pet:cursor', { clientX, clientY })
+      }
+    }, 60)
+  } else if (!ignore) {
+    stopCursorWatch()
+  }
+}
+
+function stopCursorWatch(): void {
+  if (!cursorWatchTimer) return
+  clearInterval(cursorWatchTimer)
+  cursorWatchTimer = null
 }
 
 export function getPanelWindow(): BrowserWindow | null {
@@ -123,6 +157,10 @@ export function setPetScale(scale: number): void {
     width: windowWidth,
     height: windowHeight
   })
+}
+
+export function getPetWindow(): BrowserWindow | null {
+  return petWindow
 }
 
 export function getPetWindowMargins(): { horizontal: number; vertical: number } {

@@ -8,7 +8,7 @@ import { ObsidianBaseService } from './services/obsidian-base'
 import { buildChatTodoContext, buildTodoRecommendationMessages, ensureTodoReplyPrefix, fallbackMemoRecommendation, fallbackTodoRecommendation, parseTodoRecommendationReply } from './services/todo-intelligence'
 import { SkillBus } from './skill-bus'
 import { BehaviorEngine } from './behavior-engine'
-import { getPetStagePosition, getPetWindow, getPetWindowMargins, openPanel, sendToPanel, sendToPet, setPetScale, setPetStagePosition } from './windows'
+import { getPetStagePosition, getPetWindow, getPetWindowMargins, openPanel, sendToPanel, sendToPet, setPetClickThrough, setPetScale, setPetStagePosition } from './windows'
 
 export function registerIpcHandlers(
   config: ConfigStore,
@@ -66,7 +66,7 @@ export function registerIpcHandlers(
   })
 
   ipcMain.handle(IPC.PET_SET_CLICK_THROUGH, (_event, ignore: boolean) => {
-    getPetWindow()?.setIgnoreMouseEvents(ignore, { forward: true })
+    setPetClickThrough(ignore)
     return true
   })
 

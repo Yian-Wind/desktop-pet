@@ -66,6 +66,33 @@ export function PetWindow() {
     }
   })
 
+  // While click-through is active the OS never delivers mouse events to the
+  // window (forward:true relaying is unreliable on transparent frameless
+  // windows), so the main process pushes the global cursor position instead.
+  // Run the same pixel hit test; landing on the pet clears click-through.
+  useEffect(() => {
+    let lastCheck = 0
+    const onCursor = (pos: { clientX: number; clientY: number }) => {
+      if (pointerDownRef.current) return
+      const now = performance.now()
+      if (now - lastCheck < 48) return
+      lastCheck = now
+      const onPet = hitTestRef.current?.isPointOnPet(pos.clientX, pos.clientY) ?? false
+      if (onPet) {
+        applyPetClickThrough(false)
+        if (!pointerOnPetRef.current) {
+          pointerOnPetRef.current = true
+          showQuickActions()
+        }
+      } else if (pointerOnPetRef.current) {
+        pointerOnPetRef.current = false
+        scheduleQuickActionsHide()
+      }
+    }
+    const api = window.petApi
+    return api.onCursor(onCursor)
+  })
+
   if (!pack || !state) {
     return <div className="pet-loading">loading</div>
   }
@@ -122,7 +149,15 @@ export function PetWindow() {
       if (now - lastHitTestAtRef.current < 32) return
       lastHitTestAtRef.current = now
     }
-    const onPet = forceActive || isPointOnPet(event)
+    // If the hit test is unavailable (e.g. the sprite is mid-swap and its
+    // layout resolves to nothing), never fall into click-through — a stuck
+    // transparent window is unrecoverable for the user (no clicks, no drags).
+    const hitTest = hitTestRef.current
+    if (!forceActive && !hitTest) {
+      applyPetClickThrough(false)
+      return
+    }
+    const onPet = forceActive || (hitTest?.isPointOnPet(event.clientX, event.clientY) ?? true)
     applyPetClickThrough(!onPet)
   }
 

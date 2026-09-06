@@ -28,6 +28,7 @@ export interface PetApi {
   scheduleAlarm: (minutes: number) => Promise<void>
   onPetState: (callback: (state: PetWindowState) => void) => () => void
   onConfigChanged: (callback: (config: AppConfig) => void) => () => void
+  onCursor: (callback: (pos: { clientX: number; clientY: number }) => void) => () => void
   onPackChanged: (callback: (pack: PetPack) => void) => () => void
   onPanelTabChanged: (callback: (tab: string) => void) => (() => void)
   sendChat: (text: string) => Promise<ChatMessage | { error: string }>

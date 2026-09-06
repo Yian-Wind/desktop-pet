@@ -51,6 +51,11 @@ const api: PetApi = {
     ipcRenderer.on(IPC.CONFIG_CHANGED, listener)
     return () => ipcRenderer.removeListener(IPC.CONFIG_CHANGED, listener)
   },
+  onCursor: (callback: (pos: { clientX: number; clientY: number }) => void): (() => void) => {
+    const listener = (_event: unknown, pos: { clientX: number; clientY: number }) => callback(pos)
+    ipcRenderer.on('pet:cursor', listener)
+    return () => ipcRenderer.removeListener('pet:cursor', listener)
+  },
   sendChat: (text: string): Promise<ChatMessage | { error: string }> => ipcRenderer.invoke(IPC.CHAT_SEND, text),
   testChat: (): Promise<{ ok: boolean; reply?: string; error?: string }> => ipcRenderer.invoke(IPC.CHAT_TEST),
   getChatHistory: (): Promise<ChatMessage[]> => ipcRenderer.invoke(IPC.CHAT_GET_HISTORY),

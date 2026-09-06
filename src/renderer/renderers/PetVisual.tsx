@@ -49,6 +49,7 @@ export function PetVisual({ pack, state, blinkIntervalSeconds, coatOn, hitTestRe
 
   return (
     <GifPetVisual
+      key={pack.manifest.id}
       pack={pack}
       state={state}
       coatOn={coatOn}
