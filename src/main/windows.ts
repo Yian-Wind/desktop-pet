@@ -152,16 +152,8 @@ export function setPetStagePosition(x: number, y: number): void {
   const bounds = petWindow.getBounds()
   const stageSize = bounds.width / (1 + PET_UI_MARGIN_RATIO * 2)
   const margins = getPetMarginsForStage(stageSize)
-  // Clamp the STAGE (the visible figure), not the window top-left: the window
-  // carries large UI margins above the figure, so clamping the window would
-  // make the upper screen unreachable.
-  const { width, height } = screen.getPrimaryDisplay().workAreaSize
-  const maxX = Math.max(0, width - stageSize)
-  const maxY = Math.max(0, height - stageSize)
-  const clampedX = Math.min(Math.max(x, 0), maxX)
-  const clampedY = Math.min(Math.max(y, 0), maxY)
-  const targetX = Math.round(clampedX - margins.horizontal)
-  const targetY = Math.round(clampedY - margins.vertical)
+  const targetX = Math.round(x - margins.horizontal)
+  const targetY = Math.round(y - margins.vertical)
   // getBounds() can briefly report NaN mid DPI/scale transitions; a NaN here
   // would crash setPosition with an opaque conversion failure.
   if (!Number.isFinite(targetX) || !Number.isFinite(targetY)) return
