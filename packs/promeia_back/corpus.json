@@ -1,0 +1,31 @@
+{
+  "enabled": true,
+  "idleAfterMinutes": 3,
+  "sleepAfterMinutes": 2,
+  "idleCooldownMinutes": 5,
+  "phrases": {
+    "click": [
+      "这是，我的罪孽",
+      "",
+      ""
+    ],
+    "drag-end": [
+      "待命",
+      "随时可以战斗",
+      "需要什么？请自便"
+    ],
+    "idle": [
+      "",
+      "",
+      ""
+    ],
+    "sleep": [
+      "我不需要休息",
+      "我，回忆起了外环"
+    ],
+    "wake": [
+      "",
+      ""
+    ]
+  }
+}

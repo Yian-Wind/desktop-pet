@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>promiya_back spine reference</title>
+<style> html, body { margin: 0; height: 100%; background: #333; } canvas { width: 100%; height: 100%; } </style>
+</head>
+<body>
+<script src="https://unpkg.com/@esotericsoftware/spine-webgl@4.2.120/dist/iife/spine-webgl.min.js"></script>
+<script>
+const canvas = document.createElement('canvas');
+document.body.appendChild(canvas);
+const spineCanvas = new spine.SpineCanvas(canvas, {
+  webglConfig: { alpha: true },
+  app: {
+    loadAssets (canvas) {
+      canvas.assetManager.loadJson('./promiya_back.json');
+      canvas.assetManager.loadTextureAtlas('./sp.atlas');
+    },
+    initialize (canvas) {
+      const atlas = canvas.assetManager.require('./sp.atlas');
+      const skeletonJson = canvas.assetManager.require('./promiya_back.json');
+      const skeletonData = new spine.SkeletonJson(new spine.AtlasAttachmentLoader(atlas)).readSkeletonData(skeletonJson);
+      const skeleton = new spine.Skeleton(skeletonData);
+      const state = new spine.AnimationState(new spine.AnimationStateData(skeletonData));
+      window.__pet = { skeleton, state, spineCanvas: canvas };
+      // 播放序列：eye(idle) 2s → 背手 → 0.6s → 解背手，循环
+      let phase = 0, t = 0;
+      window.__tick = (delta) => {
+        t += delta;
+        if (phase === 0 && t > 2) { state.setAnimation(0, '背手', false); phase = 1; t = 0; }
+        else if (phase === 1 && t > 0.6) { state.setAnimation(0, '解背手', false); phase = 2; t = 0; }
+        else if (phase === 2 && t > 1.5) { state.setAnimation(0, 'eye', true); phase = 0; t = 0; }
+        state.update(delta);
+        state.apply(skeleton);
+        skeleton.updateWorldTransform(spine.Physics.update);
+      };
+      state.setAnimation(0, 'eye', true);
+    },
+    update (canvas, delta) { window.__tick(delta); },
+    render (canvas) {
+      const pet = window.__pet;
+      const renderer = canvas.renderer;
+      renderer.resize(spine.ResizeMode.Expand);
+      const b = pet.skeleton.getBoundsRect();
+      const cam = renderer.camera;
+      cam.position.x = b.x + b.width / 2;
+      cam.position.y = b.y + b.height / 2;
+      cam.zoom = Math.max(b.width / canvas.htmlCanvas.width, b.height / canvas.htmlCanvas.height) * 1.15;
+      cam.setViewport(canvas.htmlCanvas.width, canvas.htmlCanvas.height);
+      cam.update();
+      canvas.clear(0, 0, 0, 0);
+      renderer.begin();
+      renderer.drawSkeleton(pet.skeleton, false);
+      renderer.end();
+    }
+  }
+});
+</script>
+</body>
+</html>

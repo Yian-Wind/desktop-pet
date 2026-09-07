@@ -1,0 +1,453 @@
+{
+  "skeleton": {
+    "hash": "promiya_back_v4",
+    "spine": "4.2.35",
+    "x": 0,
+    "y": 84.5,
+    "width": 466,
+    "height": 773.8,
+    "images": "./",
+    "audio": "./"
+  },
+  "bones": [
+    {
+      "name": "root",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "name": "body",
+      "parent": "root",
+      "x": 428.5,
+      "y": 485.5
+    },
+    {
+      "name": "head",
+      "parent": "body",
+      "x": 23.3,
+      "y": 142.3
+    },
+    {
+      "name": "coat",
+      "parent": "body",
+      "x": 16,
+      "y": -134
+    },
+    {
+      "name": "ponytail",
+      "parent": "head",
+      "x": -70.4,
+      "y": -126.7,
+      "rotation": 20
+    },
+    {
+      "name": "uparm_l_round",
+      "parent": "body",
+      "x": -45.5,
+      "y": 91.5
+    },
+    {
+      "name": "uparm_r_round",
+      "parent": "body",
+      "x": 68.5,
+      "y": 97.5
+    },
+    {
+      "name": "thigh_l",
+      "parent": "body",
+      "x": -44.6,
+      "y": -126.8
+    },
+    {
+      "name": "thigh_r",
+      "parent": "body",
+      "x": 44.6,
+      "y": -126.2
+    },
+    {
+      "name": "forearm_r_round",
+      "parent": "uparm_r_round",
+      "x": 28.5,
+      "y": -105
+    },
+    {
+      "name": "forearm_l_round",
+      "parent": "uparm_l_round",
+      "x": -28,
+      "y": -99.5
+    },
+    {
+      "name": "shin_r",
+      "parent": "thigh_r",
+      "x": 2.8,
+      "y": -139.8
+    },
+    {
+      "name": "shin_l",
+      "parent": "thigh_l",
+      "x": -2.1,
+      "y": -141.2
+    }
+  ],
+  "slots": [
+    {
+      "name": "ponytail",
+      "bone": "ponytail",
+      "attachment": "ponytail"
+    },
+    {
+      "name": "forearm_r_round",
+      "bone": "forearm_r_round",
+      "attachment": "forearm_r_round"
+    },
+    {
+      "name": "forearm_l_round",
+      "bone": "forearm_l_round",
+      "attachment": "forearm_l_round"
+    },
+    {
+      "name": "uparm_l_round",
+      "bone": "uparm_l_round",
+      "attachment": "uparm_l_round"
+    },
+    {
+      "name": "uparm_r_round",
+      "bone": "uparm_r_round",
+      "attachment": "uparm_r_round"
+    },
+    {
+      "name": "shin_r",
+      "bone": "shin_r",
+      "attachment": "shin_r"
+    },
+    {
+      "name": "shin_l",
+      "bone": "shin_l",
+      "attachment": "shin_l"
+    },
+    {
+      "name": "thigh_l",
+      "bone": "thigh_l",
+      "attachment": "thigh_l"
+    },
+    {
+      "name": "thigh_r",
+      "bone": "thigh_r",
+      "attachment": "thigh_r"
+    },
+    {
+      "name": "body",
+      "bone": "body",
+      "attachment": "body"
+    },
+    {
+      "name": "head",
+      "bone": "head",
+      "attachment": "head"
+    },
+    {
+      "name": "coat",
+      "bone": "coat",
+      "attachment": "coat"
+    }
+  ],
+  "skins": [
+    {
+      "name": "default",
+      "attachments": {
+        "ponytail": {
+          "ponytail": {
+            "type": "region",
+            "x": 111,
+            "y": -153,
+            "rotation": 0,
+            "width": 148,
+            "height": 378,
+            "scaleX": 1.1,
+            "scaleY": 1.1
+          }
+        },
+        "forearm_r_round": {
+          "forearm_r_round": {
+            "type": "region",
+            "x": 17,
+            "y": -16.5,
+            "rotation": 0,
+            "width": 135,
+            "height": 275
+          }
+        },
+        "forearm_l_round": {
+          "forearm_l_round": {
+            "type": "region",
+            "x": -25,
+            "y": -18,
+            "rotation": 0,
+            "width": 140,
+            "height": 269
+          }
+        },
+        "uparm_l_round": {
+          "uparm_l_round": {
+            "type": "region",
+            "x": -24,
+            "y": -79.5,
+            "rotation": 0,
+            "width": 140,
+            "height": 269
+          }
+        },
+        "uparm_r_round": {
+          "uparm_r_round": {
+            "type": "region",
+            "x": 45.5,
+            "y": -121.5,
+            "rotation": 0,
+            "width": 135,
+            "height": 275
+          }
+        },
+        "shin_r": {
+          "shin_r": {
+            "type": "region",
+            "x": 1.6,
+            "y": -104.5,
+            "rotation": 0,
+            "width": 85,
+            "height": 266
+          }
+        },
+        "shin_l": {
+          "shin_l": {
+            "type": "region",
+            "x": -0.8,
+            "y": -103.5,
+            "rotation": 0,
+            "width": 84,
+            "height": 266
+          }
+        },
+        "thigh_l": {
+          "thigh_l": {
+            "type": "region",
+            "x": -7.4,
+            "y": -78.7,
+            "rotation": 0,
+            "width": 93,
+            "height": 186
+          }
+        },
+        "thigh_r": {
+          "thigh_r": {
+            "type": "region",
+            "x": 7.9,
+            "y": -78.3,
+            "rotation": 0,
+            "width": 92,
+            "height": 182
+          }
+        },
+        "body": {
+          "body": {
+            "type": "region",
+            "x": 0,
+            "y": 0,
+            "rotation": 0,
+            "width": 199,
+            "height": 299
+          }
+        },
+        "head": {
+          "head": {
+            "type": "region",
+            "x": -5.8,
+            "y": 198.7,
+            "rotation": 0,
+            "width": 466,
+            "height": 461
+          }
+        },
+        "coat": {
+          "coat": {
+            "type": "region",
+            "x": 16,
+            "y": -134,
+            "rotation": 0,
+            "width": 405,
+            "height": 557
+          }
+        }
+      }
+    }
+  ],
+  "animations": {
+    "eye": {
+      "bones": {
+        "body": {
+          "translate": [
+            {
+              "curve": [
+                0,
+                0,
+                1,
+                0.5,
+                0,
+                0,
+                1,
+                -1.5
+              ]
+            },
+            {
+              "time": 2,
+              "y": -1.5,
+              "curve": [
+                2.5,
+                -1.5,
+                3,
+                0,
+                2.5,
+                -1.5,
+                3,
+                0
+              ]
+            },
+            {
+              "time": 3
+            }
+          ]
+        }
+      }
+    },
+    "背手": {
+      "bones": {
+        "uparm_l_round": {
+          "rotate": [
+            {
+              "curve": [
+                0,
+                0,
+                0.1,
+                15,
+                0,
+                0,
+                0.1,
+                15
+              ]
+            },
+            {
+              "time": 0.2,
+              "value": 30
+            }
+          ]
+        },
+        "uparm_r_round": {
+          "rotate": [
+            {
+              "curve": [
+                0,
+                0,
+                0.1,
+                -15,
+                0,
+                0,
+                0.1,
+                -15
+              ]
+            },
+            {
+              "time": 0.2,
+              "value": -30
+            }
+          ]
+        },
+        "ponytail": {
+          "rotate": [
+            {
+              "curve": [
+                0,
+                0,
+                0.1,
+                5,
+                0,
+                0,
+                0.1,
+                5
+              ]
+            },
+            {
+              "time": 0.2,
+              "value": 10
+            }
+          ]
+        }
+      }
+    },
+    "解背手": {
+      "bones": {
+        "uparm_l_round": {
+          "rotate": [
+            {
+              "value": 30,
+              "curve": [
+                0,
+                30,
+                0.1,
+                15,
+                0,
+                30,
+                0.1,
+                15
+              ]
+            },
+            {
+              "time": 0.2,
+              "value": 0
+            }
+          ]
+        },
+        "uparm_r_round": {
+          "rotate": [
+            {
+              "value": -30,
+              "curve": [
+                0,
+                -30,
+                0.1,
+                -15,
+                0,
+                -30,
+                0.1,
+                -15
+              ]
+            },
+            {
+              "time": 0.2,
+              "value": 0
+            }
+          ]
+        },
+        "ponytail": {
+          "rotate": [
+            {
+              "value": 10,
+              "curve": [
+                0,
+                10,
+                0.1,
+                5,
+                0,
+                10,
+                0.1,
+                5
+              ]
+            },
+            {
+              "time": 0.2,
+              "value": 0
+            }
+          ]
+        }
+      }
+    }
+  }
+}
