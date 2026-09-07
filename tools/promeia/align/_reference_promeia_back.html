@@ -14,12 +14,12 @@ const spineCanvas = new spine.SpineCanvas(canvas, {
   webglConfig: { alpha: true },
   app: {
     loadAssets (canvas) {
-      canvas.assetManager.loadJson('./promiya_back.json');
-      canvas.assetManager.loadTextureAtlas('./sp.atlas');
+      canvas.assetManager.loadJson('pack/promiya_back.json');
+      canvas.assetManager.loadTextureAtlas('pack/sp.atlas');
     },
     initialize (canvas) {
-      const atlas = canvas.assetManager.require('./sp.atlas');
-      const skeletonJson = canvas.assetManager.require('./promiya_back.json');
+      const atlas = canvas.assetManager.require('pack/sp.atlas');
+      const skeletonJson = canvas.assetManager.require('pack/promiya_back.json');
       const skeletonData = new spine.SkeletonJson(new spine.AtlasAttachmentLoader(atlas)).readSkeletonData(skeletonJson);
       const skeleton = new spine.Skeleton(skeletonData);
       const state = new spine.AnimationState(new spine.AnimationStateData(skeletonData));
