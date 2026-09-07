@@ -22,6 +22,8 @@ export interface PetPackManifest {
   author?: string
   persona?: PersonaConfig
   assetPaths?: Record<string, string>
+  /** true = 不出现在包列表/切换菜单中（保留目录与历史配置） */
+  hidden?: boolean
 }
 
 export interface CorpusConfig {

@@ -108,6 +108,8 @@ interface SpineRuntime {
   baseRootScaleX: number
   baseRootScaleY: number
   baseSkeletonY: number
+  // 玛拉妮系包（有 left 组合皮肤）才有落地弹跳；普罗米娅等静帧包禁用
+  supportsDropSpring: boolean
 }
 
 interface SpinePetVisualProps {
@@ -143,8 +145,8 @@ function applyStructuralDropSpring(runtime: SpineRuntime, delta: number): void {
   const elapsed = runtime.dropSpringTime
   if (elapsed < DROP_FALL_SECONDS) {
     const progress = elapsed / DROP_FALL_SECONDS
-    rootBone.scaleX = runtime.baseRootScaleX - runtime.baseRootScaleX * 0.0175 * progress
-    rootBone.scaleY = runtime.baseRootScaleY + runtime.baseRootScaleY * 0.03 * progress
+    rootBone.scaleX = runtime.baseRootScaleX - runtime.baseRootScaleX * 0.008 * progress
+    rootBone.scaleY = runtime.baseRootScaleY + runtime.baseRootScaleY * 0.015 * progress
     return
   }
 
@@ -155,8 +157,8 @@ function applyStructuralDropSpring(runtime: SpineRuntime, delta: number): void {
   const spring =
     Math.exp(-5 * springProgress) *
     Math.cos(Math.PI * 2 * springProgress)
-  rootBone.scaleX = runtime.baseRootScaleX + runtime.baseRootScaleX * 0.045 * spring
-  rootBone.scaleY = runtime.baseRootScaleY - runtime.baseRootScaleY * 0.06 * spring
+  rootBone.scaleX = runtime.baseRootScaleX + runtime.baseRootScaleX * 0.022 * spring
+  rootBone.scaleY = runtime.baseRootScaleY - runtime.baseRootScaleY * 0.03 * spring
 
   if (springProgress >= 1) {
     runtime.dropSpringTime = null
@@ -414,6 +416,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
             }
           })
 
+          // dev 验证钩子（回归测试用，提交前移除）
           runtimeRef.current = {
             skeleton,
             state: animationState,
@@ -427,7 +430,8 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
             baseRootRotation,
             baseRootScaleX,
             baseRootScaleY,
-            baseSkeletonY
+            baseSkeletonY,
+            supportsDropSpring: combinedSkin !== null
           }
 
           if (!disposed) setReady(true)
@@ -537,7 +541,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
       runtime.surfBrake = null
       return
     }
-    if (state.action === 'idle' && runtime.currentAction === 'drag') {
+    if (state.action === 'idle' && runtime.currentAction === 'drag' && runtime.supportsDropSpring) {
       runtime.dropSpringTime = 0
     }
     let animationName = ACTION_ANIMATIONS[state.action] ?? IDLE_ANIMATION
@@ -594,7 +598,12 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
     let timeout = 0
     const blink = () => {
       const runtime = runtimeRef.current
-      if (runtime?.currentAction === 'idle') {
+      // 姿势包停帧保持中（拖拽松手/idle 后 action 已回 idle，但 track 仍停在
+      // 背手/解背手末帧）：眨眼不得替换 track，否则姿势+大衣被静默冲掉
+      if (
+        runtime?.currentAction === 'idle' &&
+        !POSE_ANIMATIONS.has(runtime.currentAnimationName)
+      ) {
         runtime.state.setAnimation(0, IDLE_ANIMATION, false)
         runtime.currentAnimationName = IDLE_ANIMATION
       }

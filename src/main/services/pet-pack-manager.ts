@@ -38,6 +38,7 @@ export class PetPackManager {
       if (!existsSync(manifestPath)) continue
       try {
         const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as PetPackManifest
+        if (manifest.hidden) continue
         const assets: Record<string, string> = {}
         for (const [key, rel] of Object.entries(manifest.assetPaths ?? {})) {
           assets[key] = join('packs', entry.name, rel).split('\\').join('/')
