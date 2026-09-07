@@ -270,8 +270,8 @@
         "coat": {
           "coat": {
             "type": "region",
-            "x": 16,
-            "y": -134,
+            "x": 0,
+            "y": 0,
             "rotation": 0,
             "width": 405,
             "height": 557
