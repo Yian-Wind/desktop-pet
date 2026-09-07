@@ -82,6 +82,9 @@ const EYE_SLOT_NAMES = [
   '瞳孔',
   '高光'
 ]
+// 普罗米娅包（无 Mualani 眼部槽）：拖动闭眼 = head 槽换闭眼头附件
+const PROMEIYA_CLOSED_HEAD_ATTACHMENT = 'head_eye_eyeclosed'
+const HEAD_SLOT = 'head'
 
 interface SurfBrakeState {
   brakeEntry: TrackEntry
@@ -274,6 +277,21 @@ function getCanvasVisualBounds(
 }
 
 function setDragExpression(skeleton: Skeleton, enabled: boolean): void {
+  // 普罗米娅包：head 槽换闭眼头附件（包自带，中心已配准；睁眼头与闭眼头二选一不叠加）
+  const headSlot = skeleton.findSlot(HEAD_SLOT)
+  const closedHead = headSlot
+    ? skeleton.getAttachment(headSlot.data.index, PROMEIYA_CLOSED_HEAD_ATTACHMENT)
+    : null
+  if (headSlot && closedHead) {
+    if (enabled) {
+      headSlot.setAttachment(closedHead)
+    } else {
+      headSlot.setToSetupPose()
+    }
+    return
+  }
+
+  // Mualani 包：gt-lt-eyes 槽 + 原眼部槽渐隐
   const dragEyeSlot = skeleton.findSlot(DRAG_EYE_SLOT)
   if (!dragEyeSlot) return
 
@@ -501,6 +519,13 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
     if (!runtime || !ready) return
 
     if (state.action === 'drag') {
+      // 普罗米娅姿势包：拖动保持当前姿势停帧（背手=大衣在身/正常=无大衣），
+      // 不清轨道不回 setup——拖动只换闭眼头表情，松手后姿势原样
+      const isPosePose = POSE_ANIMATIONS.has(runtime.currentAnimationName)
+      if (isPosePose) {
+        runtime.currentAction = 'drag'
+        return
+      }
       if (runtime.currentAction !== 'drag' || runtime.dropSpringTime !== null) {
         runtime.state.clearTrack(0)
         runtime.skeleton.setToSetupPose()
@@ -516,7 +541,11 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
       runtime.dropSpringTime = 0
     }
     let animationName = ACTION_ANIMATIONS[state.action] ?? IDLE_ANIMATION
-    if (state.action === 'click') {
+    // 显式 animationName（姿势切换/睡眠动画）优先——否则 pose 包的 click 会落进
+    // 随机池（全排除后为空 → 落到不存在的 '抬手示意' → 静默不播，姿势切换失效）
+    if (state.animationName) {
+      animationName = state.animationName
+    } else if (state.action === 'click') {
       const choices = pack.manifest.animations.filter((name) => {
         return !CLICK_EXCLUDED_ANIMATIONS.has(name) && runtime.skeleton.data.findAnimation(name) !== null
       })
@@ -526,8 +555,6 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
       const pool = nonRepeatingChoices.length > 0 ? nonRepeatingChoices : choices
       animationName = pool[Math.floor(Math.random() * pool.length)] ?? ACTION_ANIMATIONS['click']
       lastClickAnimationRef.current = animationName
-    } else if (state.animationName) {
-      animationName = state.animationName
     }
     if (!runtime.skeleton.data.findAnimation(animationName)) return
     const loop = state.animationName
@@ -536,6 +563,11 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
     if (animationName === '冲浪') {
       runtime.currentAction = 'surf'
       playSurfSequence(runtime)
+      return
+    }
+    // 姿势包的 drag-end：保持停帧姿势，不回 idle eye（否则覆盖背手站姿）
+    if (state.action === 'idle' && POSE_ANIMATIONS.has(runtime.currentAnimationName)) {
+      runtime.currentAction = 'idle'
       return
     }
     if (state.action === 'click' || (state.animationName && POSE_ANIMATIONS.has(state.animationName))) {

@@ -26,6 +26,8 @@ head
 bounds:1273,2,466,461
 coat
 bounds:2,465,405,557
+head_eye_eyeclosed
+bounds:409,465,472,467
 coat_s0
 bounds:2,1028,41,557
 coat_s1
@@ -46,5 +48,3 @@ coat_s8
 bounds:362,1589,41,557
 coat_s9
 bounds:407,1589,41,557
-head_eye_eyeclosed
-bounds:1574,2,472,467

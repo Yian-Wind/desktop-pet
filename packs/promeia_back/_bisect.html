@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>coat 180° 倒转 · 分层定位页</title>
+<style>
+  html, body { margin: 0; background: #2a2a2e; color: #ddd; font: 13px/1.5 system-ui, sans-serif; }
+  body { display: flex; flex-wrap: wrap; gap: 14px; padding: 14px; align-items: flex-start; }
+  .panel { background: #38383e; border: 1px solid #555; border-radius: 8px; padding: 10px; }
+  .panel h3 { margin: 0 0 4px; font-size: 14px; color: #ffd479; }
+  .panel p { margin: 2px 0 8px; color: #aaa; font-size: 12px; max-width: 600px; }
+  canvas { background: #4a4a52; display: block; border-radius: 4px; }
+  .row { display: flex; gap: 10px; }
+  .controls { margin-top: 8px; }
+  .controls button { margin: 2px; padding: 4px 10px; cursor: pointer; background: #2c2c30; color: #ddd; border: 1px solid #666; border-radius: 4px; }
+  .controls button.active { background: #6b5a1e; border-color: #ffd479; color: #ffd479; }
+  .controls label { display: inline-block; margin: 4px 6px 0 10px; cursor: pointer; }
+  .tag { display: inline-block; background: #222; padding: 1px 6px; border-radius: 3px; margin-top: 6px; color: #9ecbff; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="panel">
+  <h3>Step 1 · atlas 贴图采样（page.png 的 coat 区域）</h3>
+  <p>runtime 采样源。GLTexture 无翻转上传（v=0 = 图像顶行）、atlas v 顶左原点、MeshAttachment degrees=0 直通道 → regionUVs v=0 必须配图像顶行。</p>
+  <div class="row">
+    <div><canvas id="c1a" width="290" height="400"></canvas><div class="tag">正确朝向（v=0 → 顶行）</div></div>
+    <div><canvas id="c1b" width="290" height="400"></canvas><div class="tag">修复前的 UV（v → 1−v，上下颠倒）</div></div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>Step 2 · align 复刻（2D 合成，bind 位姿，非 Spine）</h3>
+  <p>与 align 工具同机制：2D canvas 直接把各部件贴图画到 bind 世界四边形上（四边形用 runtime 的 bind 骨架计算）。此层贴图方向由构造保证正确 —— 等同你确认过的「单独 align 渲染不倒转」。</p>
+  <canvas id="c2" width="560" height="680"></canvas>
+  <div class="tag">大衣槽位最后绘制（在身体之上）</div>
+</div>
+
+<div class="panel">
+  <h3>Step 3 · Spine 官方 runtime（固定相机，含动画定格）</h3>
+  <p>spine-webgl 4.2.120 加载同一份 pack。固定相机看全程轨迹：背手 = 大衣从舞台左上角绕头展开；解背手 = 向右侧收拢渐隐。勾选「模拟修复前 UV」可重现倒转，对比异常引入层。</p>
+  <canvas id="c3"></canvas>
+  <div class="controls">
+    <button data-mode="bind">bind</button>
+    <button data-frame="1:0">背手 0</button>
+    <button data-frame="1:0.05">背手 0.05</button>
+    <button data-frame="1:0.11">背手 0.11</button>
+    <button data-frame="1:0.16">背手 0.16</button>
+    <button data-frame="1:0.2">背手 0.2</button>
+    <button data-frame="2:0.06">解 0.06</button>
+    <button data-frame="2:0.12">解 0.12</button>
+    <button data-frame="2:0.2">解 0.2</button>
+    <button data-mode="live">live 循环</button>
+    <label><input type="checkbox" id="uvflip"> 模拟修复前 UV（1−v 倒转）</label>
+  </div>
+</div>
+
+<script src="https://unpkg.com/@esotericsoftware/spine-webgl@4.2.120/dist/iife/spine-webgl.min.js"></script>
+<script>
+(function () {
+  const STAGE = { cx: 450, cy: 550, w: 950, h: 1150 };   // 固定取景（含聚拢轨迹余量）
+  const pageImg = new Image();
+  pageImg.src = 'page.png';
+
+  // ---- Step 1：贴图朝向对照 ----
+  pageImg.onload = () => {
+    const R = { x: 2, y: 465, w: 405, h: 557 };   // atlas: coat bounds
+    for (const [id, flip] of [['c1a', false], ['c1b', true]]) {
+      const c = document.getElementById(id), ctx = c.getContext('2d');
+      ctx.clearRect(0, 0, c.width, c.height);
+      const s = Math.min(c.width / R.w, c.height / R.h) * 0.94;
+      ctx.save();
+      ctx.translate((c.width - R.w * s) / 2, (c.height - R.h * s) / 2);
+      if (flip) { ctx.translate(0, R.h * s); ctx.scale(1, -1); }
+      ctx.drawImage(pageImg, R.x, R.y, R.w, R.h, 0, 0, R.w * s, R.h * s);
+      ctx.restore();
+    }
+  };
+
+  // ---- Step 3：Spine WebGL（先建，initialize 里顺带算 Step 2 的四边形） ----
+  const c3 = document.getElementById('c3');
+  const spineCanvas = new spine.SpineCanvas(c3, {
+    webglConfig: { alpha: true },
+    app: {
+      loadAssets (canvas) {
+        canvas.assetManager.loadJson('promiya_back.json');
+        canvas.assetManager.loadTextureAtlas('sp.atlas');
+      },
+      initialize (canvas) {
+        const atlas = canvas.assetManager.require('sp.atlas');
+        const skeletonJson = canvas.assetManager.require('promiya_back.json');
+        const skeletonData = new spine.SkeletonJson(new spine.AtlasAttachmentLoader(atlas)).readSkeletonData(skeletonJson);
+        const skeleton = new spine.Skeleton(skeletonData);
+        const state = new spine.AnimationState(new spine.AnimationStateData(skeletonData));
+        window.__pet = { skeleton, state };
+        window.__ready = true;
+
+        drawAlignReplica(skeletonData, atlas);   // Step 2
+
+        // 模式：bind | live | freeze(animIdx, t)
+        let mode = { kind: 'bind' };
+        let phase = 0, t = 0;
+        window.__setMode = (m) => { mode = m; apply(); };
+        const ANIMS = ['eye', '背手', '解背手'];
+        function apply () {
+          if (mode.kind === 'live') { state.setAnimation(0, 'eye', true); phase = 0; t = 0; return; }
+          if (mode.kind === 'bind') { skeleton.setToBindPose(); state.clearTracks(); return; }
+          state.setAnimation(0, ANIMS[mode.anim], false);
+          state.update(0);
+          if (state.tracks[0]) state.tracks[0].trackTime = mode.t;
+        }
+        window.__tick = (delta) => {
+          if (mode.kind === 'live') {
+            t += delta;
+            if (phase === 0 && t > 2) { state.setAnimation(0, ANIMS[1], false); phase = 1; t = 0; }
+            else if (phase === 1 && t > 0.6) { state.setAnimation(0, ANIMS[2], false); phase = 2; t = 0; }
+            else if (phase === 2 && t > 1.5) { state.setAnimation(0, 'eye', true); phase = 0; t = 0; }
+            state.update(delta);
+            state.apply(skeleton);
+            skeleton.updateWorldTransform(spine.Physics.update);
+          }
+        };
+        window.__uvFlip = (on) => {
+          const mesh = skeleton.findSlot('coat').getAttachment();
+          if (!mesh || mesh.type !== spine.AttachmentType.Mesh) return;
+          if (!mesh.__uvOrig) mesh.__uvOrig = Array.from(mesh.regionUVs);
+          const orig = mesh.__uvOrig;
+          for (let i = 0; i < orig.length; i += 2) {
+            mesh.regionUVs[i] = orig[i];
+            mesh.regionUVs[i + 1] = on ? 1 - orig[i + 1] : orig[i + 1];
+          }
+          mesh.updateRegion();
+          apply();
+        };
+        apply();
+        // 按钮/开关绑定
+        document.querySelectorAll('.controls button').forEach(b => {
+          b.onclick = () => {
+            document.querySelectorAll('.controls button').forEach(x => x.classList.remove('active'));
+            b.classList.add('active');
+            if (b.dataset.mode) window.__setMode({ kind: b.dataset.mode });
+            else { const [anim, t] = b.dataset.frame.split(':'); window.__setMode({ kind: 'freeze', anim: +anim, t: +t }); }
+          };
+        });
+        document.getElementById('uvflip').onchange = (e) => window.__uvFlip(e.target.checked);
+        document.querySelector('.controls button[data-mode="bind"]').classList.add('active');
+      },
+      error (canvas, errors) { window.__err = errors; },
+      update (canvas, delta) { if (window.__tick) window.__tick(delta); },
+      render (canvas) {
+        const pet = window.__pet, renderer = canvas.renderer;
+        renderer.resize(spine.ResizeMode.Expand);
+        const cam = renderer.camera;
+        const cw = canvas.htmlCanvas.width, ch = canvas.htmlCanvas.height;
+        cam.position.x = STAGE.cx; cam.position.y = STAGE.cy;
+        cam.zoom = Math.max(STAGE.w / cw, STAGE.h / ch);   // 世界单位/像素
+        cam.setViewport(cw, ch);
+        cam.update();
+        canvas.clear(0, 0, 0, 0);
+        renderer.begin();
+        renderer.drawSkeleton(pet.skeleton, false);
+        renderer.end();
+      }
+    }
+  });
+
+  // ---- Step 2：align 复刻（bind 四边形 + 2D 仿射贴图） ----
+  function drawAlignReplica (skeletonData, atlas) {
+    if (!pageImg.complete) { pageImg.onload = () => drawAlignReplica(skeletonData, atlas); return; }
+    const c = document.getElementById('c2'), ctx = c.getContext('2d');
+    const skel = new spine.Skeleton(skeletonData);
+    skel.setToBindPose();
+    skel.updateWorldTransform(spine.Physics.update);
+    const s = Math.min(c.width / STAGE.w, c.height / STAGE.h) * 0.97;
+    const W2C = (x, y) => [ (x - STAGE.cx) * s + c.width / 2, (STAGE.cy - y) * s + c.height / 2 ];
+    const world = new Float32Array(8);
+    for (const slot of skel.slots) {
+      const att = slot.getAttachment();
+      if (!att) continue;
+      const reg = att.region || (att.path && atlas.findRegion(att.path));
+      if (!reg || reg.width === 0) continue;
+      let TL, TR, BL;
+      if (att.type === spine.AttachmentType.Mesh) {
+        const n = att.worldVerticesLength / 2;
+        const wv = new Float32Array(n * 2);
+        att.computeWorldVertices(slot, 0, n * 2, wv, 0, 2);
+        TL = [wv[0], wv[1]]; TR = [wv[64], wv[65]]; BL = [wv[528], wv[529]];   // (0,0)(32,0)(0,8)
+      } else {
+        att.computeWorldVertices(slot, 0, 8, world, 0, 2);
+        BL = [world[0], world[1]]; TL = [world[2], world[3]]; TR = [world[4], world[5]];
+      }
+      const TLc = W2C(TL[0], TL[1]), TRc = W2C(TR[0], TR[1]), BLc = W2C(BL[0], BL[1]);
+      const rw = reg.width, rh = reg.height;
+      const a = (TRc[0] - TLc[0]) / rw, b = (TRc[1] - TLc[1]) / rw;
+      const cc = (BLc[0] - TLc[0]) / rh, d = (BLc[1] - TLc[1]) / rh;
+      ctx.setTransform(a, b, cc, d, TLc[0], TLc[1]);
+      ctx.drawImage(pageImg, reg.x, reg.y, reg.width, reg.height, 0, 0, rw, rh);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    }
+  }
+})();
+</script>
+</body>
+</html>

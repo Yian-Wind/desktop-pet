@@ -265,6 +265,14 @@
             "rotation": 0,
             "width": 466,
             "height": 461
+          },
+          "head_eye_eyeclosed": {
+            "type": "region",
+            "x": -5.8,
+            "y": 198.7,
+            "rotation": 0,
+            "width": 472,
+            "height": 467
           }
         },
         "coat": {
