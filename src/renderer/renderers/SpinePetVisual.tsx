@@ -13,7 +13,7 @@ import {
 } from '@esotericsoftware/spine-webgl'
 import type { TextureAtlas, TrackEntry } from '@esotericsoftware/spine-webgl'
 import type { PetPack, PetWindowState } from '../../shared/types'
-import { CLICK_EXCLUDED_ANIMATIONS } from '../../shared/animation-pool'
+import { CLICK_EXCLUDED_ANIMATIONS, POSE_ANIMATIONS } from '../../shared/animation-pool'
 import type { PetHitTest, PetVisualBounds } from './PetVisual'
 
 const ACTION_ANIMATIONS: Record<string, string> = {
@@ -387,6 +387,8 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
                 entry.animation?.name !== IDLE_ANIMATION &&
                 !(runtime.currentAction === 'surf' && !entry.reverse)
               ) {
+                // 姿势动画（背手/解背手）播完停帧保持，不回退 idle
+                if (entry.animation?.name && POSE_ANIMATIONS.has(entry.animation.name)) return
                 runtime.currentAction = 'idle'
                 runtime.currentAnimationName = IDLE_ANIMATION
                 animationState.setAnimation(0, IDLE_ANIMATION, false)
@@ -536,7 +538,8 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
       playSurfSequence(runtime)
       return
     }
-    if (state.action === 'click') {
+    if (state.action === 'click' || (state.animationName && POSE_ANIMATIONS.has(state.animationName))) {
+      // 姿势切换与点击同一重置路径：清轨道 + 回 setup（防上一姿势残留叠加）
       runtime.state.clearTrack(0)
       runtime.skeleton.setToSetupPose()
       runtime.surfBrake = null

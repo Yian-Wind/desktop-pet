@@ -1,7 +1,6 @@
 import { DEFAULT_CORPUS } from '../shared/defaults'
 import { SLEEP_EXCLUDED_ANIMATIONS } from '../shared/animation-pool'
 import type { CorpusConfig, PetEvent, PetPack, PetWindowState } from '../shared/types'
-
 function pick(arr: string[] | undefined): string | null {
   if (!arr || arr.length === 0) return null
   return arr[Math.floor(Math.random() * arr.length)]
@@ -25,6 +24,8 @@ export class BehaviorEngine {
   private sleepAnimationTimer?: NodeJS.Timeout
   private currentPack?: PetPack
   private lastSleepAnimationName: string | null = null
+  // 姿势切换状态：true = 背手（下一次点击播 解背手）
+  private poseToggled = false
   private sleepAnimationIntervalSeconds = 30
   private bubbleDurationSeconds = 5
   private bubbleTimer?: NodeJS.Timeout
@@ -39,6 +40,7 @@ export class BehaviorEngine {
     this.stopSleepAnimationTimer()
     this.currentPack = pack
     this.lastSleepAnimationName = null
+    this.poseToggled = false
     this.state.animationName = undefined
     this.corpus = {
       ...DEFAULT_CORPUS,
@@ -85,11 +87,19 @@ export class BehaviorEngine {
     this.state.animationName = undefined
     const phrases = this.corpus.phrases
     switch (event.type) {
-      case 'click':
+      case 'click': {
         this.state.action = 'click'
         this.state.emotion = 'happy'
+        // 姿势切换包（manifest 同时含 背手/解背手）：点击翻转姿势，
+        // 经 state.animationName 通道下发确定性动画（不走随机点击池）
+        const animations = this.currentPack?.manifest.animations ?? []
+        if (animations.includes('背手') && animations.includes('解背手')) {
+          this.poseToggled = !this.poseToggled
+          this.state.animationName = this.poseToggled ? '背手' : '解背手'
+        }
         this.showBubble(pick(phrases.click) ?? '戳到我啦~')
         break
+      }
       case 'drag-start':
         this.state.action = 'drag'
         this.state.emotion = 'excited'
