@@ -148,7 +148,8 @@
     {
       "name": "coat",
       "bone": "coat",
-      "attachment": "coat"
+      "attachment": "coat",
+      "color": "ffffff00"
     }
   ],
   "skins": [
@@ -6126,6 +6127,20 @@
               ]
             }
           }
+        }
+      },
+      "slots": {
+        "coat": {
+          "rgba": [
+            {
+              "time": 0,
+              "color": "ffffff00"
+            },
+            {
+              "time": 0.06,
+              "color": "ffffffff"
+            }
+          ]
         }
       }
     },
