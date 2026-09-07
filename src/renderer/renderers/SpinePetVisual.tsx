@@ -541,8 +541,14 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
       runtime.surfBrake = null
       return
     }
-    if (state.action === 'idle' && runtime.currentAction === 'drag' && runtime.supportsDropSpring) {
-      runtime.dropSpringTime = 0
+    if (state.action === 'idle' && runtime.currentAction === 'drag') {
+      // 玛拉妮靠落地弹跳结束时恢复睁眼；普罗米娅等无弹跳包必须在松手
+      // 的这一刻直接换回睁眼头，否则闭眼表情永远挂着
+      if (runtime.supportsDropSpring) {
+        runtime.dropSpringTime = 0
+      } else {
+        setDragExpression(runtime.skeleton, false)
+      }
     }
     let animationName = ACTION_ANIMATIONS[state.action] ?? IDLE_ANIMATION
     // 显式 animationName（姿势切换/睡眠动画）优先——否则 pose 包的 click 会落进
