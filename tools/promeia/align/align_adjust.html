@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Promeia 大衣微调（当前固化结果）</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #20242c; color: #e6e8ec; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; display: flex; height: 100vh; overflow: hidden; }
+  #stage-wrap { flex: 1; display: grid; place-items: center; overflow: hidden; position: relative; }
+  #stage { position: relative; background:
+      repeating-conic-gradient(#2a2f3a 0% 25%, #232733 0% 50%) 0 0 / 24px 24px; }
+  #stage img { position: absolute; user-select: none; -webkit-user-drag: none; }
+  #base { left: 0; top: 0; pointer-events: none; }
+  #coat { cursor: grab; transform-origin: top left; }
+  #coat.dragging { cursor: grabbing; }
+  #panel { width: 300px; background: #181b21; padding: 16px; overflow-y: auto; border-left: 1px solid #2c313b; }
+  h1 { font-size: 15px; margin-bottom: 4px; }
+  .hint { font-size: 12px; color: #9aa3b0; line-height: 1.6; margin-bottom: 12px; }
+  .row { margin-bottom: 10px; }
+  .row label { display: flex; justify-content: space-between; font-size: 12px; color: #c3c9d4; margin-bottom: 2px; align-items: center; }
+  .row .val { display: flex; align-items: center; gap: 4px; }
+  .row input[type=number] { width: 64px; padding: 2px 4px; background: #10131a; color: #fff;
+    border: 1px solid #2c313b; border-radius: 4px; font-size: 12px; text-align: right; }
+  input[type=range] { width: 100%; }
+  .num { font-variant-numeric: tabular-nums; }
+  .output { margin-top: 14px; padding: 10px; background: #10131a; border: 1px solid #2c313b; border-radius: 6px; font-size: 12px; }
+  .output .json { display: block; margin-top: 6px; white-space: pre; color: #7fd18c; font-family: Consolas, monospace; font-size: 11px; user-select: all; }
+  button { margin-top: 8px; width: 100%; padding: 8px; background: #3a7afe; color: #fff; border: 0; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  button.ghost { background: #2c313b; }
+  #status { margin-top: 8px; font-size: 12px; color: #9aa3b0; }
+</style>
+</head>
+<body>
+  <div id="stage-wrap">
+    <div id="stage">
+      <img id="base" src="base_coat_adjust.png">
+      <img id="coat" src="coat_crop.png">
+    </div>
+  </div>
+  <div id="panel">
+    <h1>Promeia 大衣微调（当前固化结果）</h1>
+    <div class="hint">
+      拖动大衣调整位置；滚轮或滑块调整缩放（宽高可分开调）。<br>
+      数字框可直接输入精确值（画布坐标 1254×1254）。<br>
+      底图=无大衣的背手姿势角色。大衣初始位于当前固化位置，可微调；调好后下载 align_adjust_result.json（left/top=大衣左上角在 1254×1254 画布）。
+    </div>
+    <div class="row"><label>水平位置 X <span class="val"><input type="number" id="nx" step="1">px</span></label>
+      <input type="range" id="x" min="-300" max="1500" step="1"></div>
+    <div class="row"><label>垂直位置 Y <span class="val"><input type="number" id="ny" step="1">px</span></label>
+      <input type="range" id="y" min="-300" max="1500" step="1"></div>
+    <div class="row"><label>宽度缩放 <span class="val"><input type="number" id="nsx" step="0.1">%</span></label>
+      <input type="range" id="sx" min="10" max="120" step="0.5"></div>
+    <div class="row"><label>高度缩放 <span class="val"><input type="number" id="nsy" step="0.1">%</span></label>
+      <input type="range" id="sy" min="10" max="120" step="0.5"></div>
+    <div class="row"><label>大衣不透明度 <span class="val"><span id="vo" class="num"></span>%</span></label>
+      <input type="range" id="op" min="20" max="100" step="5"></div>
+    <div class="output">
+      对齐参数（相对 1254×1254 画布，脚本可直接读取）：
+      <span class="json" id="json"></span>
+    </div>
+    <button id="save">保存对齐参数</button>
+    <button id="copy" class="ghost">复制 JSON</button>
+    <div id="status"></div>
+  </div>
+
+<script>
+// Stage shows the 1254x1254 canvas at a fitted zoom; all values are in
+// original canvas pixels.
+const CANVAS = 1254
+const stage = document.getElementById('stage')
+const base = document.getElementById('base')
+const coat = document.getElementById('coat')
+const COAT_NATURAL_W = 1033, COAT_NATURAL_H = 1358
+
+// Starting point: GPT-suggested anchors (collar center X=627, collar top
+// Y=488, width 552, height 624).
+let state = { x: 417, y: 468, sx: 39.2, sy: 41.0 }   // 当前固化值
+
+let zoom = 1
+function fit() {
+  const wrap = document.getElementById('stage-wrap')
+  zoom = Math.min((wrap.clientWidth - 80) / CANVAS, (wrap.clientHeight - 80) / CANVAS)
+  stage.style.width = stage.style.height = (CANVAS * zoom) + 'px'
+  base.style.width = base.style.height = (CANVAS * zoom) + 'px'
+  render()
+}
+
+function render() {
+  const w = COAT_NATURAL_W * state.sx / 100, h = COAT_NATURAL_H * state.sy / 100
+  coat.style.left = (state.x * zoom) + 'px'
+  coat.style.top = (state.y * zoom) + 'px'
+  coat.style.width = (w * zoom) + 'px'
+  coat.style.height = (h * zoom) + 'px'
+  coat.style.opacity = document.getElementById('op').value / 100
+  document.getElementById('x').value = state.x
+  document.getElementById('y').value = state.y
+  document.getElementById('sx').value = state.sx
+  document.getElementById('sy').value = state.sy
+  document.getElementById('json').textContent = JSON.stringify(result(), null, 2)
+  // number inputs (only when not focused, so typing isn't clobbered)
+  for (const [id, key] of [['nx','x'],['ny','y'],['nsx','sx'],['nsy','sy']]) {
+    const el = document.getElementById(id)
+    if (document.activeElement !== el) el.value = key === 'x' || key === 'y'
+      ? Math.round(state[key]) : (+state[key].toFixed(1))
+  }
+}
+
+function result() {
+  return {
+    canvas: CANVAS,
+    coat_natural: [COAT_NATURAL_W, COAT_NATURAL_H],
+    scale_x: +(state.sx / 100).toFixed(4),
+    scale_y: +(state.sy / 100).toFixed(4),
+    left: Math.round(state.x),
+    top: Math.round(state.y)
+  }
+}
+
+// number inputs: commit on Enter or blur
+for (const [id, key] of [['nx','x'],['ny','y'],['nsx','sx'],['nsy','sy']]) {
+  const el = document.getElementById(id)
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { commit(); el.blur() }
+  })
+  el.addEventListener('blur', commit)
+  function commit() {
+    const v = parseFloat(el.value)
+    if (Number.isFinite(v)) {
+      state[key] = key === 'sx' || key === 'sy'
+        ? Math.min(120, Math.max(10, v)) : v
+      render()
+    }
+  }
+}
+
+// dragging
+let drag = null
+coat.addEventListener('pointerdown', e => {
+  drag = { px: e.clientX, py: e.clientY, x: state.x, y: state.y }
+  coat.classList.add('dragging')
+  coat.setPointerCapture(e.pointerId)
+  e.preventDefault()
+})
+coat.addEventListener('pointermove', e => {
+  if (!drag) return
+  state.x = drag.x + (e.clientX - drag.px) / zoom
+  state.y = drag.y + (e.clientY - drag.py) / zoom
+  render()
+})
+coat.addEventListener('pointerup', () => { drag = null; coat.classList.remove('dragging') })
+
+// wheel: uniform zoom at cursor
+stage.addEventListener('wheel', e => {
+  e.preventDefault()
+  const rect = stage.getBoundingClientRect()
+  const cx = (e.clientX - rect.left) / zoom, cy = (e.clientY - rect.top) / zoom
+  const factor = e.deltaY < 0 ? 1.03 : 1 / 1.03
+  const nsx = Math.min(120, Math.max(10, state.sx * factor))
+  const nsy = Math.min(120, Math.max(10, state.sy * factor))
+  state.x = cx - (cx - state.x) * nsx / state.sx
+  state.y = cy - (cy - state.y) * nsy / state.sy
+  state.sx = nsx; state.sy = nsy
+  render()
+}, { passive: false })
+
+for (const id of ['x', 'y', 'sx', 'sy']) {
+  document.getElementById(id).addEventListener('input', e => {
+    state[id] = +e.target.value
+    render()
+  })
+}
+document.getElementById('op').addEventListener('input', render)
+
+// arrow keys: nudge by 1 (shift = 10)
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return
+  const step = e.shiftKey ? 10 : 1
+  if (e.key === 'ArrowLeft') state.x -= step
+  else if (e.key === 'ArrowRight') state.x += step
+  else if (e.key === 'ArrowUp') state.y -= step
+  else if (e.key === 'ArrowDown') state.y += step
+  else return
+  e.preventDefault()
+  render()
+})
+
+document.getElementById('save').addEventListener('click', () => {
+  const payload = JSON.stringify(result(), null, 2)
+  const blob = new Blob([payload], { type: 'application/json' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = 'align_adjust_result.json'
+  a.click()
+  document.getElementById('status').textContent =
+    '已开始下载 align_result.json —— 把它放到 D:\\pet\\tools\\promeia\\align\\ 覆盖即可。'
+})
+document.getElementById('copy').addEventListener('click', async () => {
+  await navigator.clipboard.writeText(JSON.stringify(result(), null, 2))
+  document.getElementById('status').textContent = '已复制到剪贴板。'
+})
+
+window.addEventListener('resize', fit)
+document.getElementById('op').value = 80
+fit()
+</script>
+</body>
+</html>

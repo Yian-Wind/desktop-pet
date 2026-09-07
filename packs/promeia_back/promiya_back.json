@@ -30,8 +30,8 @@
     {
       "name": "coat",
       "parent": "body",
-      "x": 16,
-      "y": -134
+      "x": 12,
+      "y": -137
     },
     {
       "name": "ponytail",
