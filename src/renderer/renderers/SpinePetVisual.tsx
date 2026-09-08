@@ -145,8 +145,8 @@ function applyStructuralDropSpring(runtime: SpineRuntime, delta: number): void {
   const elapsed = runtime.dropSpringTime
   if (elapsed < DROP_FALL_SECONDS) {
     const progress = elapsed / DROP_FALL_SECONDS
-    rootBone.scaleX = runtime.baseRootScaleX - runtime.baseRootScaleX * 0.008 * progress
-    rootBone.scaleY = runtime.baseRootScaleY + runtime.baseRootScaleY * 0.015 * progress
+    rootBone.scaleX = runtime.baseRootScaleX - runtime.baseRootScaleX * 0.0175 * progress
+    rootBone.scaleY = runtime.baseRootScaleY + runtime.baseRootScaleY * 0.03 * progress
     return
   }
 
@@ -157,8 +157,8 @@ function applyStructuralDropSpring(runtime: SpineRuntime, delta: number): void {
   const spring =
     Math.exp(-5 * springProgress) *
     Math.cos(Math.PI * 2 * springProgress)
-  rootBone.scaleX = runtime.baseRootScaleX + runtime.baseRootScaleX * 0.022 * spring
-  rootBone.scaleY = runtime.baseRootScaleY - runtime.baseRootScaleY * 0.03 * spring
+  rootBone.scaleX = runtime.baseRootScaleX + runtime.baseRootScaleX * 0.045 * spring
+  rootBone.scaleY = runtime.baseRootScaleY - runtime.baseRootScaleY * 0.06 * spring
 
   if (springProgress >= 1) {
     runtime.dropSpringTime = null
