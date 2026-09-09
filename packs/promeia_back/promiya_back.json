@@ -96,6 +96,12 @@
       "attachment": "ponytail"
     },
     {
+      "name": "ponytail_illuminate",
+      "bone": "ponytail",
+      "attachment": "ponytail_illuminate",
+      "color": "ffffff00"
+    },
+    {
       "name": "forearm_r_round",
       "bone": "forearm_r_round",
       "attachment": "forearm_r_round"
@@ -3018,6 +3024,18 @@
               "hw": 202.5,
               "hh": 278.5
             }
+          }
+        },
+        "ponytail_illuminate": {
+          "ponytail_illuminate": {
+            "type": "region",
+            "x": 111,
+            "y": -153,
+            "rotation": 0,
+            "width": 148,
+            "height": 378,
+            "scaleX": 1.1,
+            "scaleY": 1.1
           }
         }
       }
@@ -9277,6 +9295,38 @@
             {
               "time": 0.1733,
               "color": "ffffff00"
+            }
+          ]
+        }
+      }
+    },
+    "发光呼吸": {
+      "slots": {
+        "ponytail_illuminate": {
+          "alpha": [
+            {
+              "time": 0,
+              "value": 0,
+              "curve": [
+                0.74,
+                0.0,
+                1.26,
+                1.0
+              ]
+            },
+            {
+              "time": 2.0,
+              "value": 1.0,
+              "curve": [
+                2.74,
+                1.0,
+                3.26,
+                0.0
+              ]
+            },
+            {
+              "time": 4.0,
+              "value": 0
             }
           ]
         }

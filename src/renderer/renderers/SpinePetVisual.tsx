@@ -85,6 +85,12 @@ const EYE_SLOT_NAMES = [
 // 普罗米娅包（无 Mualani 眼部槽）：拖动闭眼 = head 槽换闭眼头附件
 const PROMEIYA_CLOSED_HEAD_ATTACHMENT = 'head_eye_eyeclosed'
 const HEAD_SLOT = 'head'
+// 普罗米娅马尾发光呼吸：背手姿势保持期间 track 1 循环"发光呼吸"（槽位 alpha 正弦），
+// 离开背手（解背手/冲浪/拖拽等）从当前值淡出后清轨道；重新入背手则从头循环
+const GLOW_POSE_ANIMATION = '背手'
+const GLOW_ANIMATION = '发光呼吸'
+const GLOW_SLOT = 'ponytail_illuminate'
+const GLOW_FADE_SECONDS = 0.6
 
 interface SurfBrakeState {
   brakeEntry: TrackEntry
@@ -104,6 +110,9 @@ interface SpineRuntime {
   swayTime: number
   dropSpringTime: number | null
   surfBrake: SurfBrakeState | null
+  // 马尾发光呼吸（promeia_back）：null=无发光（非背手姿势或无发光动画的包）；
+  // fading=true 期间从捕获的槽位 alpha 缓出至 0 后清 track 1
+  glowState: { fading: boolean; fadeFrom: number; fadeElapsed: number } | null
   baseRootRotation: number
   baseRootScaleX: number
   baseRootScaleY: number
@@ -278,6 +287,54 @@ function getCanvasVisualBounds(
   return { left, top, width, height, centerX: left + width / 2, centerY: top + height / 2 }
 }
 
+// 马尾发光呼吸的 track 1 生命周期：进入背手起循环，离开背手从当前槽位 alpha
+// 淡出（0.6s）后清轨道复位；重新入背手则从头循环。淡出期间每帧覆盖槽位 alpha
+function applyPonytailGlow(runtime: SpineRuntime): void {
+  const slot = runtime.skeleton.findSlot(GLOW_SLOT)
+  if (!slot) return
+  if (!runtime.skeleton.data.findAnimation(GLOW_ANIMATION)) return
+
+  const wantGlow = runtime.currentAnimationName === GLOW_POSE_ANIMATION
+  if (wantGlow) {
+    // 淡出中又回到背手：取消淡出，重新从头循环
+    if (runtime.glowState?.fading) runtime.glowState = null
+    if (!runtime.glowState) {
+      const entry = runtime.state.setAnimation(1, GLOW_ANIMATION, true)
+      entry.mixDuration = 0
+      runtime.glowState = { fading: false, fadeFrom: 0, fadeElapsed: 0 }
+    }
+    return
+  }
+  if (!runtime.glowState) return
+  if (!runtime.glowState.fading) {
+    // 捕获当前实际 alpha（呼吸中途离开则从当前亮度开始缓出）
+    const current = slot.color.a
+    runtime.state.clearTrack(1)
+    slot.setToSetupPose()
+    runtime.glowState = {
+      fading: true,
+      fadeFrom: current,
+      fadeElapsed: 0
+    }
+  }
+}
+
+// 淡出推进：在 state.apply 之后调用，逐帧接管发光槽 alpha 至 0 后清 track 1
+function advanceGlowFade(runtime: SpineRuntime, delta: number): void {
+  const slot = runtime.skeleton.findSlot(GLOW_SLOT)
+  if (!slot) return
+  const glow = runtime.glowState
+  if (!glow || !glow.fading) return
+  glow.fadeElapsed += delta
+  const progress = Math.min(1, glow.fadeElapsed / GLOW_FADE_SECONDS)
+  slot.color.a = glow.fadeFrom * (1 - progress)
+  if (progress >= 1) {
+    runtime.state.clearTrack(1)
+    slot.setToSetupPose()
+    runtime.glowState = null
+  }
+}
+
 function setDragExpression(skeleton: Skeleton, enabled: boolean): void {
   // 普罗米娅包：head 槽换闭眼头附件（包自带，中心已配准；睁眼头与闭眼头二选一不叠加）
   const headSlot = skeleton.findSlot(HEAD_SLOT)
@@ -402,13 +459,20 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
           animationState.addListener({
             complete: (entry) => {
               const runtime = runtimeRef.current
+              // 发光呼吸在 track 1 循环，每轮 complete 不参与姿势调度
+              if (entry.animation?.name === GLOW_ANIMATION) return
               if (
                 runtime &&
                 entry.animation?.name !== IDLE_ANIMATION &&
                 !(runtime.currentAction === 'surf' && !entry.reverse)
               ) {
-                // 姿势动画（背手/解背手）播完停帧保持，不回退 idle
-                if (entry.animation?.name && POSE_ANIMATIONS.has(entry.animation.name)) return
+                // 姿势动画（背手/解背手）播完停帧保持，轨道与姿势名不回退 idle；
+                // 但行为上要归位 idle，否则浮动要等行为引擎分钟 tick 才恢复。
+                // 仅在仍处 click 语境时归位：播放期间被 drag 打断则保持 drag 状态
+                if (entry.animation?.name && POSE_ANIMATIONS.has(entry.animation.name)) {
+                  if (runtime.currentAction === 'click') runtime.currentAction = 'idle'
+                  return
+                }
                 runtime.currentAction = 'idle'
                 runtime.currentAnimationName = IDLE_ANIMATION
                 animationState.setAnimation(0, IDLE_ANIMATION, false)
@@ -427,6 +491,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
             swayTime: 0,
             dropSpringTime: null,
             surfBrake: null,
+            glowState: null,
             baseRootRotation,
             baseRootScaleX,
             baseRootScaleY,
@@ -454,7 +519,12 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
           if (!runtime) return
           runtime.swayTime += delta
           const rootBone = runtime.skeleton.getRootBone()
-          if (runtime.currentAction === 'idle') {
+          // 浮动只让位于拖拽/冲浪等接管 root 的动作；姿势动画（背手/解背手）
+          // 不含 root 时间线，播放与停帧期间浮动持续，避免切姿势时浮动消失
+          const floating =
+            runtime.currentAction === 'idle' ||
+            (runtime.currentAction === 'click' && POSE_ANIMATIONS.has(runtime.currentAnimationName))
+          if (floating) {
             const sway = Math.sin(runtime.swayTime * Math.PI)
             if (rootBone) rootBone.rotation = runtime.baseRootRotation + sway * 0.35
             runtime.skeleton.y = runtime.baseSkeletonY + Math.sin(runtime.swayTime * Math.PI * 2) * 1.5
@@ -464,6 +534,8 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
           }
           runtime.state.update(delta)
           runtime.state.apply(runtime.skeleton)
+          applyPonytailGlow(runtime)
+          advanceGlowFade(runtime, delta)
           if (runtime.currentAction === 'drag' || runtime.dropSpringTime !== null) {
             setDragExpression(runtime.skeleton, true)
           }
