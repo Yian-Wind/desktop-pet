@@ -6,6 +6,19 @@ import type { PetHitTest, PetVisualBounds } from '../renderers/PetVisual'
 
 const quickActionHideDelayMs = 240
 
+// Pet on the left half of the screen → orbit buttons mirrored to the right of
+// the sprite (left half keeps the original left-side orbit on the right half),
+// so the buttons grow toward the screen center instead of off the screen edge.
+function getQuickActionsSide(bounds: PetVisualBounds | null): 'left' | 'right' {
+  const centerX = bounds?.centerX ?? window.innerWidth / 2
+  const petScreenX = window.screenX + centerX
+  // availLeft is Chromium-only (absent from TS's Screen type) but keeps this
+  // correct on secondary monitors positioned left of the primary.
+  const screen = window.screen as Screen & { availLeft: number }
+  const screenMidX = screen.availLeft + screen.availWidth / 2
+  return petScreenX <= screenMidX ? 'right' : 'left'
+}
+
 export function PetWindow() {
   const { pack, state, blinkIntervalSeconds, coatOn, onPointerDown, onPointerMove, onPointerUp, onPointerClick } = usePet()
   const hitTestRef = useRef<PetHitTest | null>(null)
@@ -19,6 +32,7 @@ export function PetWindow() {
   const quickActionButtonSize = 38.4
   const [alarmEditorVisible, setAlarmEditorVisible] = useState(false)
   const [alarmMinutes, setAlarmMinutes] = useState('5')
+  const [quickActionsSide, setQuickActionsSide] = useState<'left' | 'right'>('left')
 
   function applyPetClickThrough(ignore: boolean): void {
     // Never drop into click-through mid-drag: setIgnoreMouseEvents(true) breaks
@@ -166,6 +180,9 @@ export function PetWindow() {
       clearTimeout(quickActionsHideTimerRef.current)
       quickActionsHideTimerRef.current = null
     }
+    // Dragging hides the buttons, so re-deciding the side on every show covers
+    // all window movement without tracking position continuously.
+    setQuickActionsSide(getQuickActionsSide(visualBounds))
     setQuickActionsVisible(true)
   }
 
@@ -311,6 +328,7 @@ export function PetWindow() {
         '--pet-visual-center-x': `${visualBounds.centerX}px`,
         '--pet-visual-center-y': `${visualBounds.centerY}px`,
         '--pet-visual-top': `${visualBounds.top}px`,
+        '--pet-quick-action-side': quickActionsSide === 'right' ? '1' : '-1',
         '--pet-quick-action-size': `${getQuickActionLayout(visualBounds).buttonSize}px`,
         '--pet-quick-action-radius': `${getQuickActionLayout(visualBounds).orbitRadius}px`
       } as React.CSSProperties)

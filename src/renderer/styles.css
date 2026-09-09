@@ -134,19 +134,19 @@ body.pet-mode, .pet-root {
 
 .pet-quick-action--todo {
   --quick-action-delay: 0ms;
-  --quick-action-x: calc(var(--quick-action-radius) * -0.7071);
+  --quick-action-x: calc(var(--quick-action-radius) * var(--pet-quick-action-side, -1) * 0.7071);
   --quick-action-y: calc(var(--quick-action-radius) * 0.5);
 }
 
 .pet-quick-action--alarm {
   --quick-action-delay: 45ms;
-  --quick-action-x: calc(var(--quick-action-radius) * -1);
+  --quick-action-x: calc(var(--quick-action-radius) * var(--pet-quick-action-side, -1));
   --quick-action-y: 0;
 }
 
 .pet-quick-action--memo {
   --quick-action-delay: 90ms;
-  --quick-action-x: calc(var(--quick-action-radius) * -0.7071);
+  --quick-action-x: calc(var(--quick-action-radius) * var(--pet-quick-action-side, -1) * 0.7071);
   --quick-action-y: calc(var(--quick-action-radius) * -0.5);
 }
 
@@ -166,7 +166,7 @@ body.pet-mode, .pet-root {
 .pet-alarm-editor {
   position: absolute;
   top: calc(var(--pet-center-y) - var(--quick-action-radius) * 0.5 - 84px);
-  left: calc(var(--pet-center-x) - var(--quick-action-radius) * 0.7071);
+  left: calc(var(--pet-center-x) + var(--pet-quick-action-side, -1) * var(--quick-action-radius) * 0.7071);
   display: flex;
   align-items: center;
   gap: 6px;
