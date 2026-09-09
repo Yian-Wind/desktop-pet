@@ -1,12 +1,12 @@
 {
   "enabled": true,
   "idleAfterMinutes": 3,
-  "sleepAfterMinutes": 2,
+  "sleepAfterMinutes": 1,
   "idleCooldownMinutes": 5,
   "phrases": {
     "click": [
       "这是，我的罪孽",
-      "",
+      "行刑！",
       ""
     ],
     "drag-end": [
