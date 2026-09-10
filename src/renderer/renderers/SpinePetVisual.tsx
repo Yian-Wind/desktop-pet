@@ -13,7 +13,7 @@ import {
 } from '@esotericsoftware/spine-webgl'
 import type { TextureAtlas, TrackEntry } from '@esotericsoftware/spine-webgl'
 import type { PetPack, PetWindowState } from '../../shared/types'
-import { CLICK_EXCLUDED_ANIMATIONS, POSE_ANIMATIONS } from '../../shared/animation-pool'
+import { CLICK_EXCLUDED_ANIMATIONS, IDLE_SHOW_ANIMATIONS, POSE_ANIMATIONS } from '../../shared/animation-pool'
 import type { PetHitTest, PetVisualBounds } from './PetVisual'
 
 const ACTION_ANIMATIONS: Record<string, string> = {
@@ -622,6 +622,18 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
         setDragExpression(runtime.skeleton, false)
       }
     }
+    // 刃舞等待机表演被打断（睡眠/点击/提醒等无复位路径的事件）：清轨道回
+    // setup——举臂姿态、抬高的绘制顺序、刃透明度全部复位，否则残留在
+    // 半举臂状态直到下一次姿势切换
+    if (
+      runtime.currentAnimationName &&
+      IDLE_SHOW_ANIMATIONS.has(runtime.currentAnimationName) &&
+      !(state.animationName && IDLE_SHOW_ANIMATIONS.has(state.animationName))
+    ) {
+      runtime.state.clearTrack(0)
+      runtime.skeleton.setToSetupPose()
+      runtime.surfBrake = null
+    }
     let animationName = ACTION_ANIMATIONS[state.action] ?? IDLE_ANIMATION
     // 显式 animationName（姿势切换/睡眠动画）优先——否则 pose 包的 click 会落进
     // 随机池（全排除后为空 → 落到不存在的 '抬手示意' → 静默不播，姿势切换失效）
@@ -647,10 +659,15 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
       playSurfSequence(runtime)
       return
     }
-    // 姿势包的 drag-end：保持停帧姿势，不回 idle eye（否则覆盖背手站姿）
+    // 姿势包的 drag-end：保持停帧姿势，不回 idle eye（否则覆盖背手站姿）。
+    // 例外：待机表演（刃舞）要接替姿势停帧——解背手末帧即 setup，清轨后开播
     if (state.action === 'idle' && POSE_ANIMATIONS.has(runtime.currentAnimationName)) {
-      runtime.currentAction = 'idle'
-      return
+      if (!(state.animationName && IDLE_SHOW_ANIMATIONS.has(state.animationName))) {
+        runtime.currentAction = 'idle'
+        return
+      }
+      runtime.state.clearTrack(0)
+      runtime.skeleton.setToSetupPose()
     }
     if (state.action === 'click' || (state.animationName && POSE_ANIMATIONS.has(state.animationName))) {
       // 姿势切换与点击同一重置路径：清轨道 + 回 setup（防上一姿势残留叠加）
@@ -677,10 +694,13 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
     const blink = () => {
       const runtime = runtimeRef.current
       // 姿势包停帧保持中（拖拽松手/idle 后 action 已回 idle，但 track 仍停在
-      // 背手/解背手末帧）：眨眼不得替换 track，否则姿势+大衣被静默冲掉
+      // 背手/解背手末帧）：眨眼不得替换 track，否则姿势+大衣被静默冲掉。
+      // 待机表演（刃舞）播放中同理跳过——普罗米娅预留的眨眼只是重播 eye，
+      // 无真闭眼，掐断表演纯亏
       if (
         runtime?.currentAction === 'idle' &&
-        !POSE_ANIMATIONS.has(runtime.currentAnimationName)
+        !POSE_ANIMATIONS.has(runtime.currentAnimationName) &&
+        !IDLE_SHOW_ANIMATIONS.has(runtime.currentAnimationName)
       ) {
         runtime.state.setAnimation(0, IDLE_ANIMATION, false)
         runtime.currentAnimationName = IDLE_ANIMATION
