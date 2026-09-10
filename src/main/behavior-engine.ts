@@ -25,7 +25,7 @@ export class BehaviorEngine {
   private idleShowTimer?: NodeJS.Timeout
   private idleShowClearTimer?: NodeJS.Timeout
   // 刃舞表演时长（秒）——与 tools/promeia/blade_orbit.py 的 DURATION 保持一致
-  private static readonly IDLE_SHOW_DURATION_SECONDS = 10
+  private static readonly IDLE_SHOW_DURATION_SECONDS = 25
   private currentPack?: PetPack
   private lastSleepAnimationName: string | null = null
   // 姿势切换状态：true = 背手（下一次点击播 解背手）
@@ -90,8 +90,9 @@ export class BehaviorEngine {
   }
 
   async handle(event: PetEvent): Promise<void> {
-    // 刃舞表演期间忽略分钟级 idle tick（nonce/animationName 重置会掐断表演）
-    if (event.type === 'idle' && this.state.animationName &&
+    // 刃舞表演期间忽略分钟级 tick（idle/sleep 的 nonce/animationName 重置都会
+    // 掐断表演——入睡后每分钟的 tick 派发的是 sleep 事件，同样要挡）
+    if ((event.type === 'idle' || event.type === 'sleep') && this.state.animationName &&
         IDLE_SHOW_ANIMATIONS.has(this.state.animationName)) return
     if (event.type !== 'idle' && event.type !== 'sleep') this.idleMinutes = 0
     if (event.type !== 'sleep') this.stopSleepAnimationTimer()
@@ -195,7 +196,8 @@ export class BehaviorEngine {
         this.stopSleepAnimationTimer()
         return
       }
-
+      // 待机表演进行中不轮播——随机动画经 animationName 通道覆盖表演轨道
+      if (this.state.animationName && IDLE_SHOW_ANIMATIONS.has(this.state.animationName)) return
       const animationName = this.pickSleepAnimation()
       if (!animationName) return
 

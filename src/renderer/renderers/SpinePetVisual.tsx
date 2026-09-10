@@ -649,6 +649,10 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
       runtime.state.clearTrack(0)
       runtime.skeleton.setToSetupPose()
       runtime.surfBrake = null
+      // 置空 currentAction 走下方"动作变化"路径重建基底轨道（睡态=eye 呼吸）；
+      // 否则 currentAction===action 且 loop 时提前 return，轨道空置，
+      // 宠物冻结在 setup 姿势直到下一次事件
+      runtime.currentAction = ''
     }
     let animationName = ACTION_ANIMATIONS[state.action] ?? IDLE_ANIMATION
     // 显式 animationName（姿势切换/睡眠动画/待机表演）优先——否则 pose 包的 click

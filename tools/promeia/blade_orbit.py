@@ -37,16 +37,16 @@ PACK = "D:/pet/packs/promeia_back"
 SRC = "D:/pet-promiya/pet_reference/promiya/gpt_generate/spine_parts/selected"
 
 # ============================ 参数区 ============================
-DURATION = 10.0          # 总时长（秒）；behavior-engine 的 IDLE_SHOW_DURATION_SECONDS 与此同步
+DURATION = 25.0          # 总时长（秒）；behavior-engine 的 IDLE_SHOW_DURATION_SECONDS 与此同步
 RAISE_T = 0.4            # 抬臂时长
-HOLD_END = 9.4           # 公转窗口结束（之后落臂）
+HOLD_END = 24.4          # 公转窗口结束（之后落臂）
 UPARM_ABDUCT_DEG = 4.0    # 大臂外展（正=屏幕逆时针，很小的防僵硬角度，基础位置大臂不动）
 FOREARM_RAISE_DEG = 116.0  # 小臂相对大臂 60°（世界角 4+116=120°，小臂局部-y 指向右上）
 SWAY_UPARM_DEG = 1.0     # 大臂摆动幅度
 SWAY_FOREARM_DEG = 2.5   # 小臂摆动幅度
 SWAY_PERIOD = 5.0        # 手臂摆动周期（秒）
 
-ORBIT_TURNS = 2.0        # 公转圈数（屏幕逆时针）
+ORBIT_TURNS = 16 / 3      # 公转圈数（屏幕逆时针）；25s 版窗口 24s ÷ 4.5s/圈 = 保速 5⅓ 圈
 SPIN_TURNS = 2.0         # 屏幕可见自转圈数（顺时针）
 ORBIT_RADIUS = 60.0      # 轨道长半轴（spine 单位，长轴 ⊥ 小臂）
 FLATTEN_K = 0.5          # 压扁系数（短轴 = R×K，沿小臂方向）
@@ -305,21 +305,29 @@ def build():
         用 ease-in-out-sine 贝塞尔：过零点由插值自然穿过（速度最大），
         极值点速度归零——真实的钟摆式速度分布，无中途停顿。
         曲线挂在每段的"起点键"上（Spine 的 curve 管辖本键→下一键），
-        全程位置与速度连续。"""
+        全程位置与速度连续。
+
+        收势保护：最后一个极值必须距 HOLD_END ≥ 半周期（P/2），否则收势弧
+        被压缩在极短时段内冲完基线、又被落臂段硬接——落臂起点出现速度尖峰
+        （表现为落臂位置突变）。余量不足时舍去尾部极值，从上一极值直接收势。"""
         first_ext = RAISE_T + period / 4  # 摆动从基线出发，P/4 后到达第一极值
         exts = []
         k = 0
         while True:
             t_ext = first_ext + k * period / 2
-            if t_ext > HOLD_END - 1e-6:
+            if t_ext > HOLD_END - period / 2 + 1e-6:  # 收势余量 ≥ 半周期
                 break
             exts.append((t_ext, raise_deg + (sway_deg if k % 2 == 0 else -sway_deg)))
             k += 1
         keys = [
             rot_key(None, 0, abs_curve(0, 0, RAISE_T, raise_deg, SINE)),            # 抬臂
-            rot_key(RAISE_T, raise_deg,
-                    abs_curve(RAISE_T, raise_deg, exts[0][0], exts[0][1], SINE)),   # 摆起
         ]
+        if exts:
+            keys.append(rot_key(RAISE_T, raise_deg,
+                                abs_curve(RAISE_T, raise_deg, exts[0][0], exts[0][1], SINE)))  # 摆起
+        else:
+            keys.append(rot_key(RAISE_T, raise_deg,
+                                abs_curve(RAISE_T, raise_deg, HOLD_END, raise_deg, SINE)))  # 窗口太短无摆动
         for i, (t_ext, v_ext) in enumerate(exts):                                   # 正弦摆动
             t_next, v_next = exts[i + 1] if i + 1 < len(exts) else (HOLD_END, raise_deg)
             keys.append(rot_key(t_ext, v_ext, abs_curve(t_ext, v_ext, t_next, v_next, SINE)))
@@ -331,7 +339,7 @@ def build():
     def depth_scale_keys(sign):
         """透视缩放（双值同幅）：远(指尖侧 φ∈0..180, sinφ>0)=FAR，近(肘侧)=NEAR。
         sign=+1 → blade_a（s=mid−amp·sinφ），sign=-1 → blade_b（反相）。"""
-        n_seg = int(ORBIT_TURNS * 4)  # 每圈 4 段（90° 采样）
+        n_seg = math.ceil(ORBIT_TURNS * 4)  # 每圈 4 段（90° 采样），非整圈向上取整覆盖全程
         mid = (NEAR_SCALE + FAR_SCALE) / 2
         amp = (NEAR_SCALE - FAR_SCALE) / 2
 
@@ -368,20 +376,20 @@ def build():
             "forearm_r_round": {"rotate": arm_timeline(FOREARM_RAISE_DEG, SWAY_FOREARM_DEG)},
             "blade_revolve": {"rotate": [
                 rot_key(None, 0),
-                rot_key(RAISE_T, 0, abs_curve(0, 0, RAISE_T, 0, LINEAR)),
-                rot_key(HOLD_END, rev_deg, abs_curve(RAISE_T, 0, HOLD_END, rev_deg, LINEAR)),
+                rot_key(RAISE_T, 0, abs_curve(RAISE_T, 0, HOLD_END, rev_deg, LINEAR)),
+                rot_key(HOLD_END, rev_deg),
                 rot_key(DURATION, rev_deg),
             ]},
             "blade_spin_a": {"rotate": [
                 rot_key(None, 0),
-                rot_key(RAISE_T, 0, abs_curve(0, 0, RAISE_T, 0, LINEAR)),
-                rot_key(HOLD_END, spin_deg, abs_curve(RAISE_T, 0, HOLD_END, spin_deg, LINEAR)),
+                rot_key(RAISE_T, 0, abs_curve(RAISE_T, 0, HOLD_END, spin_deg, LINEAR)),
+                rot_key(HOLD_END, spin_deg),
                 rot_key(DURATION, spin_deg),
             ], "scale": depth_scale_keys(+1)},
             "blade_spin_b": {"rotate": [
                 rot_key(None, 0),
-                rot_key(RAISE_T, 0, abs_curve(0, 0, RAISE_T, 0, LINEAR)),
-                rot_key(HOLD_END, spin_deg, abs_curve(RAISE_T, 0, HOLD_END, spin_deg, LINEAR)),
+                rot_key(RAISE_T, 0, abs_curve(RAISE_T, 0, HOLD_END, spin_deg, LINEAR)),
+                rot_key(HOLD_END, spin_deg),
                 rot_key(DURATION, spin_deg),
             ], "scale": depth_scale_keys(-1)},
         },
@@ -445,7 +453,7 @@ def build():
         state_first, state_second = off_a, off_b
     else:
         state_first, state_second = off_b, off_a
-    n_sw = int(ORBIT_TURNS * 2)
+    n_sw = math.ceil(ORBIT_TURNS * 2)  # 非整圈时向上取整，最后不足半圈的一段也切换到位
     do_frames = [{"time": RAISE_T, "offsets": state_first}]
     for k in range(1, n_sw + 1):
         t = RAISE_T + orbit_t * k / n_sw
