@@ -1,5 +1,5 @@
 import { DEFAULT_CORPUS } from '../shared/defaults'
-import { IDLE_SHOW_ANIMATIONS, POSE_ANIMATIONS, SLEEP_EXCLUDED_ANIMATIONS } from '../shared/animation-pool'
+import { IDLE_SHOW_ANIMATIONS, SLEEP_EXCLUDED_ANIMATIONS } from '../shared/animation-pool'
 import type { CorpusConfig, PetEvent, PetPack, PetWindowState } from '../shared/types'
 function pick(arr: string[] | undefined): string | null {
   if (!arr || arr.length === 0) return null
@@ -158,10 +158,15 @@ export class BehaviorEngine {
         this.state.emotion = 'neutral'
         this.showBubble(pick(phrases.wake) ?? '我醒啦！')
     }
-    // 回到 idle 重新挂待机表演定时器；离开 idle（点击/拖拽/睡眠等）即撤下
+    // 回到 idle 重新挂待机表演定时器；离开 idle（点击/拖拽/睡眠等）即撤下。
+    // 点击是瞬时反应（动画播完即归 idle 语义），渲染端由 complete 监听回 idle，
+    // 但主进程不再有后续事件——若此处不重挂，待机表演要等 60s 一次的分钟 tick
+    // 才恢复，期间表现为"打断后再也不触发"。点击事件本身短暂，重挂无害：
+    // fireIdleShow 触发时若 action 仍非 idle 会自动跳过本轮。
     if (this.state.action === 'idle') {
       if (!this.idleShowTimer && !this.idleShowClearTimer) this.startIdleShowTimer()
-    } else {
+    } else if (this.state.action !== 'click' && this.state.action !== 'drag') {
+      // click/drag 是短时动作（下一事件会重挂），其余（sleep 等）撤下定时器
       this.stopIdleShowTimer()
     }
     this.emit()
@@ -225,6 +230,7 @@ export class BehaviorEngine {
     if (!show) return
     this.idleShowTimer = setTimeout(() => {
       this.idleShowTimer = undefined
+      console.log('[idle-show] timer fired, interval =', this.sleepAnimationIntervalSeconds)
       this.fireIdleShow(show, BehaviorEngine.IDLE_SHOW_DURATION_SECONDS)
     }, this.sleepAnimationIntervalSeconds * 1000)
   }
@@ -241,23 +247,33 @@ export class BehaviorEngine {
   }
 
   private fireIdleShow(show: string, durationSeconds: number): void {
-    if (this.state.action !== 'idle') return
-    const held = this.state.animationName
-    if (held) {
-      // 表演可接替解背手停帧（已释放、末帧即 setup）；背手保持/表演未清场则跳过本轮
-      const releasedPose = POSE_ANIMATIONS.has(held) && !this.poseToggled
-      if (!releasedPose) {
-        this.startIdleShowTimer()
-        return
-      }
+    console.log('[idle-show] fire:', show, 'action=', this.state.action,
+      'held=', this.state.animationName, 'poseToggled=', this.poseToggled)
+    if (this.state.action !== 'idle') {
+      console.log('[idle-show] skip: not idle')
+      return
+    }
+    // 背手姿势保持中不表演（姿势会被覆盖且手臂状态错乱）。判 poseToggled
+    // 而非 animationName——分钟级 idle tick 会清掉 animationName，但姿势
+    // 停帧实际仍由渲染端保持（POSE_ANIMATIONS），主进程姿势状态只在
+    // 点击切换时变化。解背手释放态（poseToggled=false）可正常接替表演。
+    if (this.poseToggled && this.currentPack?.manifest.animations.includes('背手')) {
+      console.log('[idle-show] skip: pose held (背手)')
+      this.startIdleShowTimer()
+      return
     }
     this.state.actionNonce += 1
     this.state.animationName = show
     this.emit()
     this.idleShowClearTimer = setTimeout(() => {
       this.idleShowClearTimer = undefined
-      // 表演被点击等事件打断时 animationName 已被 handle() 清空，此处不动作
-      if (this.state.animationName !== show) return
+      // 表演被点击等事件打断时 animationName 已被 handle() 清空；
+      // 仍需重挂触发器（action 已回到 idle 的话），否则定时器死锁
+      if (this.state.animationName !== show) {
+        console.log('[idle-show] clear skipped: interrupted')
+        if (this.state.action === 'idle' && !this.idleShowTimer) this.startIdleShowTimer()
+        return
+      }
       this.state.actionNonce += 1
       this.state.animationName = undefined
       this.emit()
@@ -277,9 +293,15 @@ export class BehaviorEngine {
 
   private hideBubble(): void {
     this.state.bubbleVisible = false
-    // cheer/alarm reactions exist for their bubble; once it hides the pet
+    // cheer/alarm/click reactions exist for their bubble; once it hides the pet
     // returns to idle so sprite reactions (e.g. Promeia's closed eyes) reset.
-    if (this.state.action === 'cheer' || this.state.action === 'alarm') {
+    // click 的归位尤其重要：渲染端动画播完只改渲染端状态，主进程的 action
+    // 若不归位会永远停在 'click'，待机表演的 fireIdleShow 全部 skip:not idle，
+    // 表现为"打断后再也不触发"。
+    if (
+      this.state.action === 'cheer' || this.state.action === 'alarm' ||
+      this.state.action === 'click'
+    ) {
       this.state.action = 'idle'
       if (!this.idleShowTimer && !this.idleShowClearTimer) this.startIdleShowTimer()
     }
