@@ -44,13 +44,13 @@ UPARM_ABDUCT_DEG = 4.0    # 大臂外展（正=屏幕逆时针，很小的防僵
 FOREARM_RAISE_DEG = 116.0  # 小臂相对大臂 60°（世界角 4+116=120°，小臂局部-y 指向右上）
 SWAY_UPARM_DEG = 1.0     # 大臂摆动幅度
 SWAY_FOREARM_DEG = 2.5   # 小臂摆动幅度
-SWAY_PERIOD = 2.0        # 手臂摆动周期（秒），(HOLD_END-RAISE_T) 需为半周期整数倍
+SWAY_PERIOD = 5.0        # 手臂摆动周期（秒）
 
 ORBIT_TURNS = 2.0        # 公转圈数（屏幕逆时针）
 SPIN_TURNS = 2.0         # 屏幕可见自转圈数（顺时针）
 ORBIT_RADIUS = 60.0      # 轨道长半轴（spine 单位，长轴 ⊥ 小臂）
 FLATTEN_K = 0.5          # 压扁系数（短轴 = R×K，沿小臂方向）
-ORBIT_TILT_DEG = 10.0    # 黄道倾角（短轴与小臂的夹角；正值=整体平面向上倾）
+ORBIT_TILT_DEG = 20.0    # 黄道倾角（短轴与小臂的夹角；正值=整体平面向上倾）
 ORBIT_CENTER_LOCAL = (48.0, -118.0)  # 轨道中心（小臂骨骼局部坐标，掌心中心线；图像列99→骨骼x=48.5）
 NEAR_SCALE = 1.15        # 近端放大
 FAR_SCALE = 0.85         # 远端缩小
