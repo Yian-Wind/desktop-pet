@@ -294,7 +294,11 @@ function applyPonytailGlow(runtime: SpineRuntime): void {
   if (!slot) return
   if (!runtime.skeleton.data.findAnimation(GLOW_ANIMATION)) return
 
-  const wantGlow = runtime.currentAnimationName === GLOW_POSE_ANIMATION
+  // 马尾发光呼吸：背手姿势保持 或 睡眠长待机 期间 track 1 循环"发光呼吸"
+  // （槽位 alpha 正弦）——长待机里的安静光效
+  const wantGlow =
+    runtime.currentAnimationName === GLOW_POSE_ANIMATION ||
+    runtime.currentAction === 'sleep'
   if (wantGlow) {
     // 淡出中又回到背手：取消淡出，重新从头循环
     if (runtime.glowState?.fading) runtime.glowState = null
@@ -466,6 +470,15 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
                 entry.animation?.name !== IDLE_ANIMATION &&
                 !(runtime.currentAction === 'surf' && !entry.reverse)
               ) {
+                // 睡态待机表演（刃舞）播完回到睡态基底（eye 呼吸），仍在睡眠
+                if (
+                  entry.animation?.name &&
+                  IDLE_SHOW_ANIMATIONS.has(entry.animation.name) &&
+                  runtime.currentAction === 'sleep'
+                ) {
+                  animationState.setAnimation(0, IDLE_ANIMATION, false)
+                  return
+                }
                 // 姿势动画（背手/解背手）播完停帧保持，轨道与姿势名不回退 idle；
                 // 但行为上要归位 idle，否则浮动要等行为引擎分钟 tick 才恢复。
                 // 仅在仍处 click 语境时归位：播放期间被 drag 打断则保持 drag 状态
@@ -520,9 +533,12 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
           runtime.swayTime += delta
           const rootBone = runtime.skeleton.getRootBone()
           // 浮动只让位于拖拽/冲浪等接管 root 的动作；姿势动画（背手/解背手）
-          // 不含 root 时间线，播放与停帧期间浮动持续，避免切姿势时浮动消失
+          // 不含 root 时间线，播放与停帧期间浮动持续，避免切姿势时浮动消失。
+          // 睡态基底（eye 呼吸）期间保持浮动；刃舞播放中不含 root 时间线，
+          // currentAction='sleep' 同样保留浮动
           const floating =
             runtime.currentAction === 'idle' ||
+            runtime.currentAction === 'sleep' ||
             (runtime.currentAction === 'click' && POSE_ANIMATIONS.has(runtime.currentAnimationName))
           if (floating) {
             const sway = Math.sin(runtime.swayTime * Math.PI)
@@ -635,10 +651,13 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
       runtime.surfBrake = null
     }
     let animationName = ACTION_ANIMATIONS[state.action] ?? IDLE_ANIMATION
-    // 显式 animationName（姿势切换/睡眠动画）优先——否则 pose 包的 click 会落进
-    // 随机池（全排除后为空 → 落到不存在的 '抬手示意' → 静默不播，姿势切换失效）
+    // 显式 animationName（姿势切换/睡眠动画/待机表演）优先——否则 pose 包的 click
+    // 会落进随机池（全排除后为空 → 落到不存在的 '抬手示意' → 静默不播，姿势切换失效）
     if (state.animationName) {
       animationName = state.animationName
+    } else if (state.action === 'sleep' && !runtime.skeleton.data.findAnimation(animationName)) {
+      // 睡态基底动画（如 loop）在姿势包里不存在：回退 eye 呼吸，避免入睡死寂
+      animationName = IDLE_ANIMATION
     } else if (state.action === 'click') {
       const choices = pack.manifest.animations.filter((name) => {
         return !CLICK_EXCLUDED_ANIMATIONS.has(name) && runtime.skeleton.data.findAnimation(name) !== null

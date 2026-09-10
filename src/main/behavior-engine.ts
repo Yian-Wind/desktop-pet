@@ -61,21 +61,9 @@ export class BehaviorEngine {
     this.emit()
     this.idleTimer = setInterval(() => {
       this.idleMinutes += 1
-      // 睡眠动画池为空的包不自动入睡：入睡会撤下待机表演定时器，而池空时
-      // 睡态没有任何动画可播（视觉与待机无异），等于把宠物冻结成死状态
-      // （promeia_back 曾在 60s 后静默停摆刃舞）。显式 sleep 事件不受影响。
-      const shouldSleep =
-        this.corpus.enabled &&
-        this.idleMinutes >= this.corpus.sleepAfterMinutes &&
-        this.hasSleepAnimations()
+      const shouldSleep = this.corpus.enabled && this.idleMinutes >= this.corpus.sleepAfterMinutes
       this.handle({ type: shouldSleep ? 'sleep' : 'idle' })
     }, 60_000)
-    this.startIdleShowTimer()
-  }
-
-  private hasSleepAnimations(): boolean {
-    const animations = this.currentPack?.manifest.animations ?? []
-    return animations.some((name) => !SLEEP_EXCLUDED_ANIMATIONS.has(name))
   }
 
   stop(): void {
@@ -86,9 +74,10 @@ export class BehaviorEngine {
 
   setSleepAnimationIntervalSeconds(seconds: number): void {
     this.sleepAnimationIntervalSeconds = seconds
-    if (this.state.action === 'sleep') this.startSleepAnimationTimer()
-    // 待机表演复用同一间隔：设置变更时重排
-    this.startIdleShowTimer()
+    if (this.state.action === 'sleep') {
+      this.startSleepAnimationTimer()
+      this.startIdleShowTimer()
+    }
   }
 
   setBubbleDurationSeconds(seconds: number): void {
@@ -169,15 +158,12 @@ export class BehaviorEngine {
         this.state.emotion = 'neutral'
         this.showBubble(pick(phrases.wake) ?? '我醒啦！')
     }
-    // 回到 idle 重新挂待机表演定时器；离开 idle（点击/拖拽/睡眠等）即撤下。
-    // 点击是瞬时反应（动画播完即归 idle 语义），渲染端由 complete 监听回 idle，
-    // 但主进程不再有后续事件——若此处不重挂，待机表演要等 60s 一次的分钟 tick
-    // 才恢复，期间表现为"打断后再也不触发"。点击事件本身短暂，重挂无害：
-    // fireIdleShow 触发时若 action 仍非 idle 会自动跳过本轮。
-    if (this.state.action === 'idle') {
+    // 待机表演定时器生命周期：睡眠态（长待机）挂载——刃舞等表演在睡态轮播；
+    // 醒/普通待机/交互撤下。click/drag 是短时动作（下一事件会重挂），
+    // sleep 分支的 startSleepAnimationTimer 对池空的包没有可播项（无害）。
+    if (this.state.action === 'sleep') {
       if (!this.idleShowTimer && !this.idleShowClearTimer) this.startIdleShowTimer()
     } else if (this.state.action !== 'click' && this.state.action !== 'drag') {
-      // click/drag 是短时动作（下一事件会重挂），其余（sleep 等）撤下定时器
       this.stopIdleShowTimer()
     }
     this.emit()
@@ -226,7 +212,8 @@ export class BehaviorEngine {
   }
 
   // 待机表演（如普罗米娅的刃舞）：每 sleepAnimationIntervalSeconds 秒尝试一次，
-  // 播放 = 动画时长 + 间隔；非 idle（拖拽/睡眠等）或姿势保持（背手）时跳过本轮。
+  // 播放 = 动画时长 + 间隔。仅在睡眠态（长待机）播放——睡眠即本包的长待机表现，
+  // 池空的包入睡后靠它轮播（替代死寂）；普通待机/姿势保持（背手）跳过本轮。
   private startIdleShowTimer(): void {
     // 仅重排触发定时器；表演进行中的清场定时器（idleShowClearTimer）不能动，
     // 否则 animationName 卡在表演名上、后续触发全部跳过
@@ -260,15 +247,19 @@ export class BehaviorEngine {
   private fireIdleShow(show: string, durationSeconds: number): void {
     console.log('[idle-show] fire:', show, 'action=', this.state.action,
       'held=', this.state.animationName, 'poseToggled=', this.poseToggled)
-    if (this.state.action !== 'idle') {
-      console.log('[idle-show] skip: not idle')
+    // 仅睡眠态（长待机）播放：普通待机的稳定形象不被打断；池空的包
+    // 入睡后由表演轮播避免死寂
+    if (this.state.action !== 'sleep') {
+      console.log('[idle-show] skip: not sleeping')
       return
     }
     // 背手姿势保持中不表演（姿势会被覆盖且手臂状态错乱）。判 poseToggled
     // 而非 animationName——分钟级 idle tick 会清掉 animationName，但姿势
     // 停帧实际仍由渲染端保持（POSE_ANIMATIONS），主进程姿势状态只在
-    // 点击切换时变化。解背手释放态（poseToggled=false）可正常接替表演。
-    if (this.poseToggled && this.currentPack?.manifest.animations.includes('背手')) {
+    // 点击切换时变化。仅对姿势包（同时含背手/解背手）生效；
+    // 解背手释放态（poseToggled=false）可正常接替表演。
+    const animations = this.currentPack?.manifest.animations ?? []
+    if (this.poseToggled && animations.includes('背手') && animations.includes('解背手')) {
       console.log('[idle-show] skip: pose held (背手)')
       this.startIdleShowTimer()
       return
@@ -282,7 +273,7 @@ export class BehaviorEngine {
       // 仍需重挂触发器（action 已回到 idle 的话），否则定时器死锁
       if (this.state.animationName !== show) {
         console.log('[idle-show] clear skipped: interrupted')
-        if (this.state.action === 'idle' && !this.idleShowTimer) this.startIdleShowTimer()
+        if (this.state.action === 'sleep' && !this.idleShowTimer) this.startIdleShowTimer()
         return
       }
       this.state.actionNonce += 1
@@ -306,15 +297,11 @@ export class BehaviorEngine {
     this.state.bubbleVisible = false
     // cheer/alarm/click reactions exist for their bubble; once it hides the pet
     // returns to idle so sprite reactions (e.g. Promeia's closed eyes) reset.
-    // click 的归位尤其重要：渲染端动画播完只改渲染端状态，主进程的 action
-    // 若不归位会永远停在 'click'，待机表演的 fireIdleShow 全部 skip:not idle，
-    // 表现为"打断后再也不触发"。
     if (
       this.state.action === 'cheer' || this.state.action === 'alarm' ||
       this.state.action === 'click'
     ) {
       this.state.action = 'idle'
-      if (!this.idleShowTimer && !this.idleShowClearTimer) this.startIdleShowTimer()
     }
     this.emit()
   }
