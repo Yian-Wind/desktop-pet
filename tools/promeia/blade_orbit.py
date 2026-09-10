@@ -60,8 +60,11 @@ BLADE_SCALE = 0.28        # blade 贴图渲染缩放（半径加大后为守住�
 BLADE_ART_ROT = 0.0      # 贴图在自转骨骼上的初始朝向（预览后调）
 FADE_IN_T = 0.35         # 刃淡入时长（自 RAISE_T 起）
 FADE_OUT_T = 0.35        # 刃淡出时长（止于 HOLD_END）
+SWAP_FADE_T = 0.15       # 两段式换装的原图快速淡出/淡回时长（避开双影重叠期）
 
 BLADE_REGION = (1000, 480)  # page.png 粘贴左上角（253×247 右下空闲带）
+SWAP_REGION = (1300, 480)   # 刃舞小臂替换贴图粘贴左上角（135×275，肘部对齐直用）
+UPARM_TRUNC_REGION = (1450, 480)  # 截短上臂（肘部以下透明）粘贴左上角（135×275）
 # ================================================================
 
 SINE = (0.37, 0.0, 0.63, 1.0)      # ease-in-out-sine
@@ -155,19 +158,44 @@ def build():
         assert "blade_a" not in slot_names, "skeleton 已有 blade_a 槽位但无 blade_plane 骨骼，状态异常"
         assert "刃舞" not in skel["animations"], "skeleton 已有 刃舞 动画"
 
-    # ---------------- 图集 ----------------
+    # ---------------- 图集（blade + 刃舞小臂替换贴图，均幂等） ----------------
     page = Image.open(page_path)
-    blade = Image.open(f"{SRC}/blade.png").convert("RGBA")
-    bw, bh = blade.size
-    assert_free_region(atlas_text, BLADE_REGION + (bw, bh), page.width, page.height,
-                       self_ok="\nblade\n" in atlas_text)
+    # 清理上一版 palmfoward 方案遗留的图集区域（幂等，须在占用断言前执行）
+    atlas_text = re.sub(r"forearm_r_round_palmfoward\nbounds:[^\n]*\n", "", atlas_text)
     page_out = page.convert("RGBA").copy()
-    page_out.paste(blade, BLADE_REGION, blade)  # 幂等：同区域重复贴无副作用
-    if "\nblade\n" in atlas_text:
-        atlas_out = atlas_text
-    else:
-        atlas_out = atlas_text.rstrip("\n") + "\n" + \
-            f"blade\nbounds:{BLADE_REGION[0]},{BLADE_REGION[1]},{bw},{bh}\n"
+    atlas_out = atlas_text
+    patch_sizes = {}
+    # 截短上臂：原图肘部以下（骨骼局部 y<0，图像行>121）透明化——部件贴图在肘下
+    # 自带"幽灵下臂"（设计上靠原位小臂覆盖），抬臂后小臂折起会侧露
+    uparm_src = Image.open(f"{SRC}/uparm_r_round.png").convert("RGBA")
+    up_trunc = uparm_src.copy()
+    pa = up_trunc.load()
+    for r in range(122, up_trunc.height):
+        for c in range(up_trunc.width):
+            pr, pg, pb, palpha = pa[c, r]
+            pa[c, r] = (pr, pg, pb, 0)
+    patches = [
+        ("blade", f"{SRC}/blade.png", BLADE_REGION, None),
+        ("forearm_r_round_bladedance_leftward", f"{SRC}/forearm_r_round_bladedance_leftward.png",
+         SWAP_REGION, None),  # 135×275 同尺寸直用
+        ("uparm_r_round_trunc", None, UPARM_TRUNC_REGION, None),
+    ]
+    patch_images = {"uparm_r_round_trunc": up_trunc}
+    for region_name, src_path, (rx, ry), force_size in patches:
+        img = patch_images.get(region_name) or Image.open(src_path).convert("RGBA")
+        if force_size and img.size != force_size:
+            img = img.resize(force_size, Image.LANCZOS)
+        w, h = img.size
+        patch_sizes[region_name] = (w, h)
+        assert_free_region(atlas_out, (rx, ry, w, h), page.width, page.height,
+                           self_ok=f"\n{region_name}\n" in atlas_out)
+        # 矩形整块替换（无 mask）：源图的透明像素写入真透明。带 mask 的 paste
+        # 只按"mask>0 即替换"处理，会把 alpha 1~254 的半透明像素全部变成不透明，
+        # 且换图时旧内容残留在新图透明处，表现为双重绘制
+        page_out.paste(img, (rx, ry))
+        if f"\n{region_name}\n" not in atlas_out:
+            atlas_out = atlas_out.rstrip("\n") + "\n" + \
+                f"{region_name}\nbounds:{rx},{ry},{w},{h}\n"
 
     # ---------------- 骨骼 ----------------
     def add_bone(name, parent, x=0, y=0, rotation=0, sy=1):
@@ -198,7 +226,7 @@ def build():
     add_bone("blade_center_b", "blade_offset_b", ORBIT_RADIUS, 0)
     add_bone("blade_spin_b", "blade_center_b")
 
-    # ---------------- 槽位（末尾追加，setup 最顶但 alpha=0 隐藏） ----------------
+    # ---------------- 槽位（刃两槽末尾追加；掌心朝前叠加槽紧跟原小臂槽位） ----------------
     for name, bone in (("blade_a", "blade_spin_a"), ("blade_b", "blade_spin_b")):
         existing = next((s for s in skel["slots"] if s["name"] == name), None)
         if existing:
@@ -206,10 +234,58 @@ def build():
         else:
             skel["slots"].append({"name": name, "bone": bone,
                                   "attachment": name, "color": "ffffff00"})
+    # 掌心朝前小臂叠加槽：紧跟原小臂槽位（setup 即叠在其上，alpha=0 隐藏；
+    # 刃舞期间 alpha 渐变实现两图交叉淡化，绘制顺序随小臂一起抬层）
+    # 截短上臂叠加槽：紧跟 uparm_r_round 槽位，刃舞期间渐显遮盖幽灵下臂
+    ut_name = "uparm_r_round_trunc"
+    existing_ut = next((s for s in skel["slots"] if s["name"] == ut_name), None)
+    if existing_ut:
+        existing_ut["attachment"] = "uparm_r_round_trunc"
+        existing_ut["bone"] = "uparm_r_round"
+        i_ua = next(i for i, s in enumerate(skel["slots"]) if s["name"] == "uparm_r_round")
+        i_ut = skel["slots"].index(existing_ut)
+        if i_ut != i_ua + 1:
+            skel["slots"].insert(i_ua + 1, skel["slots"].pop(i_ut))
+    else:
+        for i, s in enumerate(skel["slots"]):
+            if s["name"] == "uparm_r_round":
+                skel["slots"].insert(i + 1, {"name": ut_name, "bone": "uparm_r_round",
+                                             "attachment": "uparm_r_round_trunc",
+                                             "color": "ffffff00"})
+                break
+    ov_name = "forearm_r_round_pf"
+    ov_attach = "forearm_r_round_bladedance_leftward"
+    existing_ov = next((s for s in skel["slots"] if s["name"] == ov_name), None)
+    if existing_ov:
+        # 幂等更新：附件名/骨骼跟随当前参数，位置校正到紧随原小臂槽位
+        existing_ov["attachment"] = ov_attach
+        existing_ov["bone"] = "forearm_r_round"
+        i_fa = next(i for i, s in enumerate(skel["slots"]) if s["name"] == "forearm_r_round")
+        i_ov = skel["slots"].index(existing_ov)
+        if i_ov != i_fa + 1:
+            skel["slots"].insert(i_fa + 1, skel["slots"].pop(i_ov))
+    else:
+        for i, s in enumerate(skel["slots"]):
+            if s["name"] == "forearm_r_round":
+                skel["slots"].insert(i + 1, {"name": ov_name, "bone": "forearm_r_round",
+                                             "attachment": ov_attach,
+                                             "color": "ffffff00"})
+                break
     slot_names = [s["name"] for s in skel["slots"]]
 
     # ---------------- 附件（同一 blade 区域，path 引用） ----------------
     atts = skel["skins"][0]["attachments"]
+    bw, bh = patch_sizes["blade"]
+    # 截短上臂：叠加槽附件，与原上臂附件同框同位
+    atts[ut_name] = {"uparm_r_round_trunc": dict(
+        atts["uparm_r_round"]["uparm_r_round"])}
+    # 刃舞小臂替换贴图：叠加槽附件，与原小臂附件同框同位（肘部对齐，仅换图）
+    atts["forearm_r_round_pf"] = {"forearm_r_round_bladedance_leftward": dict(
+        atts["forearm_r_round"]["forearm_r_round"])}
+    # 清理上一版 palmfoward 方案的遗留（图集区域 + 皮肤附件，均幂等）
+    atlas_out = re.sub(r"forearm_r_round_palmfoward\nbounds:[^\n]*\n", "", atlas_out)
+    atts["forearm_r_round"].pop("forearm_r_round_palmfoward", None)
+    atts["forearm_r_round_pf"].pop("forearm_r_round_palmfoward", None)
     for slot in ("blade_a", "blade_b"):
         atts[slot] = {slot: {
             "type": "region", "path": "blade",
@@ -276,12 +352,14 @@ def build():
 
     fade_keys = [
         alpha_key(None, 0),
-        alpha_key(RAISE_T, 0, abs_curve(RAISE_T, 0, RAISE_T + FADE_IN_T, 1, SINE)),
-        alpha_key(RAISE_T + FADE_IN_T, 1,
-                  abs_curve(RAISE_T + FADE_IN_T, 1, HOLD_END - FADE_OUT_T, 1, SINE)),
-        alpha_key(HOLD_END - FADE_OUT_T, 1,
-                  abs_curve(HOLD_END - FADE_OUT_T, 1, HOLD_END, 0, SINE)),
-        alpha_key(HOLD_END, 0),
+        # 淡入与抬臂动作同时完成（0→RAISE_T），到位即已全显——不晚于抬臂，
+        # 否则举定后原臂还会裸露一段时间
+        alpha_key(0, 0, abs_curve(0, 0, RAISE_T, 1, SINE)),
+        alpha_key(RAISE_T, 1,
+                  abs_curve(RAISE_T, 1, HOLD_END, 1, SINE)),
+        # 淡出与落臂动作同时进行（HOLD_END→DURATION），落地即归零
+        alpha_key(HOLD_END, 1, abs_curve(HOLD_END, 1, DURATION, 0, SINE)),
+        alpha_key(DURATION, 0),
     ]
 
     skel["animations"]["刃舞"] = {
@@ -310,33 +388,54 @@ def build():
         "slots": {
             "blade_a": {"alpha": list(fade_keys)},
             "blade_b": {"alpha": list(fade_keys)},
+            # 互补交叉淡化（与抬/降臂动作对齐）：抬臂段原臂 1→0 与替换图 0→1
+            # 同步互补（任意时刻两图 alpha 和为 1），落臂段反向对称。
+            "forearm_r_round_pf": {"alpha": list(fade_keys)},
+            # 截短上臂随抬臂渐显（遮盖幽灵下臂），落臂渐隐
+            "uparm_r_round_trunc": {"alpha": list(fade_keys)},
+            "forearm_r_round": {"alpha": [
+                alpha_key(None, 1),
+                alpha_key(0, 1, abs_curve(0, 1, RAISE_T, 0, SINE)),
+                alpha_key(RAISE_T, 0,
+                          abs_curve(RAISE_T, 0, HOLD_END, 0, SINE)),
+                alpha_key(HOLD_END, 0, abs_curve(HOLD_END, 0, DURATION, 1, SINE)),
+                alpha_key(DURATION, 1),
+            ]},
         },
     }
 
-    # ---------------- draworder：举臂抬层 + 两刃前后交换 ----------------
-    # setup 序：…, coat(12), blade_a(13), blade_b(14)。
-    # 状态A（远/指尖侧，刃在小臂下）：仅把 forearm_r 提到 coat 之上；
-    #   blade_a 因 forearm 占位自动滑到其下一位（被小臂遮挡、但在 coat/head 之上），
+    # ---------------- draworder：举臂抬层（小臂+叠加槽） + 两刃前后交换 ----------------
+    # setup 序：…, coat, blade_a, blade_b（叠加槽紧跟原小臂槽位）。
+    # 状态A（远/指尖侧，刃在小臂下）：小臂与叠加槽提到 coat 之上（叠加槽紧随其上，
+    #   掌心朝前贴图覆盖原小臂），blade_a 滑到 forearm 之前（被小臂遮挡、在 coat/head 之上），
     #   blade_b 保持最顶。
-    # 状态B（近/肘侧，刃在小臂上）：a 提到最顶，b 滑到 forearm 之下。
-    i_fa = slot_names.index("forearm_r_round")
-    i_a = slot_names.index("blade_a")
-    i_b = slot_names.index("blade_b")
-    top = len(slot_names) - 1                    # 14
-    above_coat = slot_names.index("coat") + 1    # 13
-    off_lift = [{"slot": "forearm_r_round", "offset": above_coat - i_fa}]
-    off_a = list(off_lift)
-    off_b = off_lift + [{"slot": "blade_a", "offset": top - i_a},
-                        {"slot": "blade_b", "offset": above_coat - 1 - i_b}]
+    # 状态B（近/肘侧，刃在小臂上）：blade_b 滑到 forearm 之前，blade_a 提到最顶。
+    tail_a = ["blade_a", "forearm_r_round", "forearm_r_round_pf", "blade_b"]
+    tail_b = ["blade_b", "forearm_r_round", "forearm_r_round_pf", "blade_a"]
+
+    def order_tail(tail):
+        rest = [s for s in slot_names if s not in tail]
+        return rest + tail
+
+    def offsets_for(target):
+        # offsets 必须按 setup 索引升序排列（解析算法按升序处理，乱序会死循环）
+        offs = [{"slot": s, "offset": target.index(s) - slot_names.index(s)}
+                for s in target if target.index(s) != slot_names.index(s)]
+        offs.sort(key=lambda o: slot_names.index(o["slot"]))
+        return offs
+
+    off_a = offsets_for(order_tail(tail_a))
+    off_b = offsets_for(order_tail(tail_b))
     seq_a = offsets_result(slot_names, off_a)
     seq_b = offsets_result(slot_names, off_b)
-    # 断言：状态下刃紧邻 forearm 之前一位（被小臂遮挡）且在 coat 之后（不被身体/头遮挡）
-    assert seq_a.index("blade_a") == seq_a.index("forearm_r_round") - 1, seq_a
-    assert seq_a.index("blade_a") > seq_a.index("coat"), seq_a
-    assert seq_a[-1] == "blade_b", seq_a
-    assert seq_b.index("blade_b") == seq_b.index("forearm_r_round") - 1, seq_b
-    assert seq_b.index("blade_b") > seq_b.index("coat"), seq_b
-    assert seq_b[-1] == "blade_a", seq_b
+    # 断言：叠加槽紧随小臂之上；远端刃在小臂前一位（被小臂遮挡）且在 coat 之后；
+    # 近端刃最顶。
+    for seq, under, over in ((seq_a, "blade_a", "blade_b"),
+                             (seq_b, "blade_b", "blade_a")):
+        assert seq.index(under) == seq.index("forearm_r_round") - 1, seq
+        assert seq.index(under) > seq.index("coat"), seq
+        assert seq.index("forearm_r_round_pf") == seq.index("forearm_r_round") + 1, seq
+        assert seq[-1] == over, seq
 
     # 切换时刻：长轴穿越（φ=0°/180°…）每半圈一次；指尖侧=A（刃在下），肘侧=B（刃在上）。
     # 抬层从 RAISE_T（手臂举到位、刃开始淡入）才生效——0~RAISE_T 手臂还垂在

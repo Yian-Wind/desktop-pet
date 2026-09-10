@@ -52,3 +52,7 @@ ponytail_illuminate
 bounds:884,476,94,240
 blade
 bounds:1000,480,253,247
+forearm_r_round_bladedance_leftward
+bounds:1300,480,135,275
+uparm_r_round_trunc
+bounds:1450,480,135,275
