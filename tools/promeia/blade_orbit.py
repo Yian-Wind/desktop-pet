@@ -42,13 +42,13 @@ RAISE_T = 0.4            # 抬臂时长
 HOLD_END = 9.4           # 公转窗口结束（之后落臂）
 UPARM_ABDUCT_DEG = 4.0    # 大臂外展（正=屏幕逆时针，很小的防僵硬角度，基础位置大臂不动）
 FOREARM_RAISE_DEG = 116.0  # 小臂相对大臂 60°（世界角 4+116=120°，小臂局部-y 指向右上）
-SWAY_UPARM_DEG = 1.5     # 大臂摆动幅度
-SWAY_FOREARM_DEG = 4.0   # 小臂摆动幅度
-SWAY_PERIOD = 2.0        # 摆动周期（秒），(HOLD_END-RAISE_T) 需为半周期整数倍
+SWAY_UPARM_DEG = 1.0     # 大臂摆动幅度
+SWAY_FOREARM_DEG = 2.5   # 小臂摆动幅度
+SWAY_PERIOD = 2.0        # 手臂摆动周期（秒），(HOLD_END-RAISE_T) 需为半周期整数倍
 
 ORBIT_TURNS = 2.0        # 公转圈数（屏幕逆时针）
 SPIN_TURNS = 2.0         # 屏幕可见自转圈数（顺时针）
-ORBIT_RADIUS = 50.0      # 轨道长半轴（spine 单位，长轴 ⊥ 小臂）
+ORBIT_RADIUS = 60.0      # 轨道长半轴（spine 单位，长轴 ⊥ 小臂）
 FLATTEN_K = 0.5          # 压扁系数（短轴 = R×K，沿小臂方向）
 ORBIT_TILT_DEG = 10.0    # 黄道倾角（短轴与小臂的夹角；正值=整体平面向上倾）
 ORBIT_CENTER_LOCAL = (48.0, -118.0)  # 轨道中心（小臂骨骼局部坐标，掌心中心线；图像列99→骨骼x=48.5）
@@ -56,7 +56,7 @@ NEAR_SCALE = 1.15        # 近端放大
 FAR_SCALE = 0.85         # 远端缩小
 LAYER_FLIP = False       # True = 远近/层级翻转（预览后如上下层反了改这里）
 
-BLADE_SCALE = 0.33        # blade 贴图渲染缩放（253×247 → 101×99）
+BLADE_SCALE = 0.28        # blade 贴图渲染缩放（半径加大后为守住右缘可视域相应缩小）
 BLADE_ART_ROT = 0.0      # 贴图在自转骨骼上的初始朝向（预览后调）
 FADE_IN_T = 0.35         # 刃淡入时长（自 RAISE_T 起）
 FADE_OUT_T = 0.35        # 刃淡出时长（止于 HOLD_END）
@@ -65,7 +65,6 @@ BLADE_REGION = (1000, 480)  # page.png 粘贴左上角（253×247 右下空闲�
 # ================================================================
 
 SINE = (0.37, 0.0, 0.63, 1.0)      # ease-in-out-sine
-SNAP_OUT = (0.05, 0.7, 0.1, 1.0)   # 抬臂：快起缓停（缩短右缘出界时间）
 LINEAR = (0.0, 0.0, 1.0, 1.0)
 
 
@@ -223,26 +222,34 @@ def build():
     spin_deg = -(ORBIT_TURNS + SPIN_TURNS) * 360.0  # 屏幕自转 = 公转+相对 = 顺时针 SPIN_TURNS 圈
     rev_deg = ORBIT_TURNS * 360.0
 
-    def arm_timeline(raise_deg, sway_deg):
-        """抬臂 → 举臂姿态上正弦摆动（半周期采样：极值/过零交替，末相位归零）→ 落臂。"""
-        keys = [rot_key(None, 0)]
-        keys.append(rot_key(RAISE_T, raise_deg,
-                            abs_curve(0, 0, RAISE_T, raise_deg, SNAP_OUT)))
-        t, prev_v = RAISE_T, raise_deg
+    def arm_timeline(raise_deg, sway_deg, period=SWAY_PERIOD):
+        """抬臂 → 举臂姿态上正弦摆动 → 收势落臂。
+
+        正弦摆动只在极值处设键（±amp 交替，每半周期一个），相邻极值之间
+        用 ease-in-out-sine 贝塞尔：过零点由插值自然穿过（速度最大），
+        极值点速度归零——真实的钟摆式速度分布，无中途停顿。
+        曲线挂在每段的"起点键"上（Spine 的 curve 管辖本键→下一键），
+        全程位置与速度连续。"""
+        first_ext = RAISE_T + period / 4  # 摆动从基线出发，P/4 后到达第一极值
+        exts = []
         k = 0
         while True:
-            k += 1
-            t_next = RAISE_T + k * SWAY_PERIOD / 2
-            if t_next > HOLD_END + 1e-6:
+            t_ext = first_ext + k * period / 2
+            if t_ext > HOLD_END - 1e-6:
                 break
-            if k % 2 == 1:  # 极值：±amp 交替
-                v = raise_deg + sway_deg * (1 if ((k - 1) // 2) % 2 == 0 else -1)
-            else:           # 过零
-                v = raise_deg
-            keys.append(rot_key(t_next, v, abs_curve(t, prev_v, t_next, v, SINE)))
-            t, prev_v = t_next, v
-        keys.append(rot_key(DURATION, 0,
-                            abs_curve(HOLD_END, prev_v, DURATION, 0, SINE)))
+            exts.append((t_ext, raise_deg + (sway_deg if k % 2 == 0 else -sway_deg)))
+            k += 1
+        keys = [
+            rot_key(None, 0, abs_curve(0, 0, RAISE_T, raise_deg, SINE)),            # 抬臂
+            rot_key(RAISE_T, raise_deg,
+                    abs_curve(RAISE_T, raise_deg, exts[0][0], exts[0][1], SINE)),   # 摆起
+        ]
+        for i, (t_ext, v_ext) in enumerate(exts):                                   # 正弦摆动
+            t_next, v_next = exts[i + 1] if i + 1 < len(exts) else (HOLD_END, raise_deg)
+            keys.append(rot_key(t_ext, v_ext, abs_curve(t_ext, v_ext, t_next, v_next, SINE)))
+        keys.append(rot_key(HOLD_END, raise_deg,                                       # 落臂
+                            abs_curve(HOLD_END, raise_deg, DURATION, 0, SINE)))
+        keys.append(rot_key(DURATION, 0))
         return keys
 
     def depth_scale_keys(sign):
@@ -347,7 +354,7 @@ def build():
             break
         do_frames.append({"time": round(t, 4),
                           "offsets": state_second if k % 2 == 1 else state_first})
-    do_frames.append({"time": HOLD_END})  # 恢复 setup 绘制顺序
+    do_frames.append({"time": DURATION})  # 落臂到位后恢复 setup 绘制顺序（举着臂复位会瞬间翻转遮挡）
     skel["animations"]["刃舞"]["drawOrder"] = do_frames  # 4.2 运行时读驼峰键名 drawOrder，小写会被静默忽略
 
     # ---------------- 几何摘要（干跑检查用） ----------------
