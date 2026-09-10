@@ -674,6 +674,18 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
       lastClickAnimationRef.current = animationName
     }
     if (!runtime.skeleton.data.findAnimation(animationName)) return
+    // 睡态保持姿势停帧：入睡不改变站姿（背手/解背手停帧原样过夜），
+    // 只叠加发光等睡态光效。此前睡态基底（eye）会直接冲掉姿势停帧
+    // 露出普通站姿 + 发光，表现为"解背手状态下头发莫名发光"。
+    // 显式 animationName（睡态轮播的刃舞等）不受此守卫影响。
+    if (
+      state.action === 'sleep' &&
+      !state.animationName &&
+      POSE_ANIMATIONS.has(runtime.currentAnimationName)
+    ) {
+      runtime.currentAction = 'sleep'
+      return
+    }
     const loop = state.animationName
       ? LOOP_ANIMATIONS.has(animationName)
       : LOOP_ACTIONS.has(state.action)
