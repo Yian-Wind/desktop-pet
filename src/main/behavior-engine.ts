@@ -61,10 +61,21 @@ export class BehaviorEngine {
     this.emit()
     this.idleTimer = setInterval(() => {
       this.idleMinutes += 1
-      const shouldSleep = this.corpus.enabled && this.idleMinutes >= this.corpus.sleepAfterMinutes
+      // 睡眠动画池为空的包不自动入睡：入睡会撤下待机表演定时器，而池空时
+      // 睡态没有任何动画可播（视觉与待机无异），等于把宠物冻结成死状态
+      // （promeia_back 曾在 60s 后静默停摆刃舞）。显式 sleep 事件不受影响。
+      const shouldSleep =
+        this.corpus.enabled &&
+        this.idleMinutes >= this.corpus.sleepAfterMinutes &&
+        this.hasSleepAnimations()
       this.handle({ type: shouldSleep ? 'sleep' : 'idle' })
     }, 60_000)
     this.startIdleShowTimer()
+  }
+
+  private hasSleepAnimations(): boolean {
+    const animations = this.currentPack?.manifest.animations ?? []
+    return animations.some((name) => !SLEEP_EXCLUDED_ANIMATIONS.has(name))
   }
 
   stop(): void {
