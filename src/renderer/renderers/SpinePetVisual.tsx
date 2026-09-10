@@ -294,11 +294,8 @@ function applyPonytailGlow(runtime: SpineRuntime): void {
   if (!slot) return
   if (!runtime.skeleton.data.findAnimation(GLOW_ANIMATION)) return
 
-  // 马尾发光呼吸：背手姿势保持 或 睡眠长待机 期间 track 1 循环"发光呼吸"
-  // （槽位 alpha 正弦）——长待机里的安静光效
-  const wantGlow =
-    runtime.currentAnimationName === GLOW_POSE_ANIMATION ||
-    runtime.currentAction === 'sleep'
+  // 马尾发光呼吸：仅背手姿势保持期间 track 1 循环"发光呼吸"（槽位 alpha 正弦）
+  const wantGlow = runtime.currentAnimationName === GLOW_POSE_ANIMATION
   if (wantGlow) {
     // 淡出中又回到背手：取消淡出，重新从头循环
     if (runtime.glowState?.fading) runtime.glowState = null
