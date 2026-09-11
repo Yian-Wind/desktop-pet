@@ -651,6 +651,13 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
       // 宠物冻结在 setup 姿势直到下一次事件
       runtime.currentAction = ''
     }
+    // 冲浪序列播放中：无显式 animationName 的普通 idle（点击气泡隐藏定时器把
+    // click 归位 idle、分钟级 idle tick）不清轨——下板倒放段由 complete 监听
+    // 自然收尾回待机（冲浪 7.89s > 气泡时长会掐掉落地段）；拖拽/入睡/姿势
+    // 切换/再次点击等真实打断带各自状态走各自分支，不受此守卫影响
+    if (runtime.currentAction === 'surf' && state.action === 'idle' && !state.animationName) {
+      return
+    }
     let animationName = ACTION_ANIMATIONS[state.action] ?? IDLE_ANIMATION
     // 显式 animationName（姿势切换/睡眠动画/待机表演）优先——否则 pose 包的 click
     // 会落进随机池（全排除后为空 → 落到不存在的 '抬手示意' → 静默不播，姿势切换失效）
