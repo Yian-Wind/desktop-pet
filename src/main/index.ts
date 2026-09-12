@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { registerPetAssetProtocol, registerPetAssetHandler } from './protocol'
-import { createPetWindow, createPanelWindow, getPetWindow, sendToPet } from './windows'
+import { createPetWindow, getPetWindow, sendToPet } from './windows'
 import { createTray } from './tray'
 import { ConfigStore } from './config'
 import { PetPackManager } from './services/pet-pack-manager'
@@ -45,7 +45,7 @@ if (!gotLock) {
       ...startupConfig.petPosition,
       scale: startupConfig.petScales[startupPack?.manifest.id ?? ''] ?? startupPack?.manifest.defaultScale ?? 1
     })
-    createPanelWindow()
+    // 面板窗口懒建：openPanel 首次调用时才创建，省一个常驻渲染进程（~160MB）
     createTray(() => app.quit())
 
     const currentPack = startupPack
@@ -54,5 +54,12 @@ if (!gotLock) {
 
   app.on('window-all-closed', () => {
     // 托盘常驻，不随窗口关闭退出
+  })
+
+  // 退出看门狗：pet-asset 流式协议或有挂起的渲染进程会让 app.quit() 的正常
+  // 流程无限等待（主进程存活 → 单实例锁被占 → 后续启动全部静默退出、
+  // 旧资产永久驻留）。1.5s 后强制终结本进程与全部子进程（GPU/网络服务）。
+  app.on('before-quit', () => {
+    setTimeout(() => app.exit(0), 1500)
   })
 }
