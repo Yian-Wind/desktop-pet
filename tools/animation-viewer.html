@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Spine 动画全库预览 · Desktop Pet</title>
+<style>
+  body { margin: 0; padding: 16px; background: #1d2430; color: #dfe8f5; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; }
+  h1 { font-size: 16px; margin: 0 0 12px; font-weight: 600; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+  .bar label { font-size: 13px; color: #a8b8cf; }
+  select, button { background: #2a3444; color: #dfe8f5; border: 1px solid #3d4b60; border-radius: 6px; padding: 5px 10px; font-size: 13px; }
+  button:hover, select:hover { border-color: #5d7397; }
+  #speed { width: 140px; }
+  #stage { background: #dbe7f2; border-radius: 10px; display: block; width: 520px; height: 560px; }
+  #meta { margin-top: 10px; font-size: 13px; color: #8fd3a0; white-space: pre-wrap; }
+  .hint { margin-top: 6px; font-size: 12px; color: #7d8da6; }
+</style>
+</head>
+<body>
+<h1>Spine 动画全库预览（骨架全部动画，含 manifest 未暴露的）</h1>
+<div class="bar">
+  <label>包 <select id="pack"></select></label>
+  <label>皮肤 <select id="skin"></select></label>
+  <label>动画 <select id="anim"></select></label>
+  <label>速度 <input id="speed" type="range" min="0.25" max="2" step="0.05" value="1"> <span id="speedVal">1.00×</span></label>
+  <button id="play">暂停</button>
+  <button id="replay">重播</button>
+</div>
+<canvas id="stage" width="520" height="560"></canvas>
+<div id="meta">loading…</div>
+<div class="hint">玛拉妮默认皮肤 default+left（与应用一致，朝左）；promeia_back 仅 default。物理约束（physics）按官方 4.2 运行时模拟。</div>
+<script src="/runtime/spine-webgl.js"></script>
+<script>
+const SPINE = window.spine
+const PORT = location.port || '8137'
+const BASE = `http://127.0.0.1:${PORT}/packs/`
+const FIT_MARGIN = 1.15
+
+const PACKS = {
+  mualani: {
+    label: '玛拉妮（mualani）',
+    skeleton: 'mualani.json', atlas: 'sl.atlas',
+    skins: ['default+left（应用默认）', 'default', 'left', 'right']
+  },
+  promeia_back: {
+    label: '普罗米娅（promeia_back）',
+    skeleton: 'promiya_back.json', atlas: 'sp.atlas',
+    skins: ['default']
+  }
+}
+
+let current = null   // { canvas, state, skeleton }
+let paused = false
+let speed = 1
+
+const $ = (id) => document.getElementById(id)
+function meta(text, isError) {
+  $('meta').textContent = text
+  $('meta').style.color = isError ? '#e08a8a' : '#8fd3a0'
+}
+
+function fillSelect(sel, items) {
+  sel.innerHTML = ''
+  for (const [value, label] of items) {
+    const opt = document.createElement('option')
+    opt.value = value; opt.textContent = label
+    sel.appendChild(opt)
+  }
+}
+
+function loadPack(packId) {
+  if (current) { current.canvas.dispose(); current = null }
+  const pack = PACKS[packId]
+  meta(`加载 ${pack.label} …`)
+  fillSelect($('skin'), pack.skins.map((s) => [s, s]))
+  const skinName = pack.skins[0]
+  const canvasEl = $('stage')
+  const spineCanvas = new SPINE.SpineCanvas(canvasEl, {
+    webglConfig: { alpha: true, antialias: true },
+    app: {
+      loadAssets(c) {
+        c.assetManager.loadJson(BASE + packId + '/' + pack.skeleton)
+        c.assetManager.loadTextureAtlas(BASE + packId + '/' + pack.atlas)
+      },
+      initialize(c) {
+        const atlas = c.assetManager.require(BASE + packId + '/' + pack.atlas)
+        const json = c.assetManager.require(BASE + packId + '/' + pack.skeleton)
+        const data = new SPINE.SkeletonJson(new SPINE.AtlasAttachmentLoader(atlas)).readSkeletonData(json)
+        const skeleton = new SPINE.Skeleton(data)
+        if (skinName.startsWith('default+left')) {
+          const combined = new SPINE.Skin('pet-left')
+          combined.addSkin(data.findSkin('default'))
+          combined.addSkin(data.findSkin('left'))
+          skeleton.setSkin(combined)
+        } else {
+          skeleton.setSkinByName(skinName)
+        }
+        skeleton.setToSetupPose()
+        skeleton.updateWorldTransform(SPINE.Physics.update)
+        // 与应用一致：setup 姿态的静态包围盒定相机，不随动画逐帧变焦
+        const bounds = skeleton.getBoundsRect()
+
+        const state = new SPINE.AnimationState(new SPINE.AnimationStateData(data))
+        state.addListener({
+          complete: (entry) => { if (!entry.loop) meta(`播完：${entry.animation.name}（单次动画已停帧，可点“重播”）`) }
+        })
+
+        const names = data.animations.map((a) => a.name).sort((a, b) => a.localeCompare(b, 'zh'))
+        fillSelect($('anim'), names.map((n) => [n, n]))
+        const first = names.includes('打瞌睡') ? '打瞌睡' : names[0]
+        $('anim').value = first
+        const entry = state.setAnimation(0, first, true)
+        entry.mixDuration = 0
+
+        current = { canvas: c, state, skeleton, data, bounds }
+        meta(`${pack.label} · ${names.length} 支动画 · 骨骼 ${data.bones.length} 根 · 播放中：${first}`)
+      },
+      update(c, delta) {
+        if (!current?.state || paused) return
+        current.state.update(delta * speed)
+        current.state.apply(current.skeleton)
+        current.skeleton.updateWorldTransform(SPINE.Physics.update)
+      },
+      render(c) {
+        if (!current?.skeleton) return
+        const renderer = c.renderer
+        renderer.resize(SPINE.ResizeMode.Expand)
+        const camera = renderer.camera
+        const b = current.bounds
+        camera.position.x = b.x + b.width / 2
+        camera.position.y = b.y + b.height / 2
+        camera.zoom = Math.max(b.width / canvasEl.width, b.height / canvasEl.height) * FIT_MARGIN
+        camera.setViewport(canvasEl.width, canvasEl.height)
+        camera.update()
+        c.clear(0, 0, 0, 0)
+        renderer.begin()
+        renderer.drawSkeleton(current.skeleton, false)
+        renderer.end()
+      },
+      error(c, errors) { meta('加载失败：' + Object.values(errors).join('\n'), true) }
+    }
+  })
+  current = { canvas: spineCanvas, state: null, skeleton: null }
+}
+
+$('pack').addEventListener('change', (e) => loadPack(e.target.value))
+$('skin').addEventListener('change', (e) => {
+  if (!current?.skeleton) return
+  const data = current.data
+  const name = e.target.value
+  if (name.startsWith('default+left')) {
+    const combined = new SPINE.Skin('pet-left')
+    combined.addSkin(data.findSkin('default'))
+    combined.addSkin(data.findSkin('left'))
+    current.skeleton.setSkin(combined)
+  } else {
+    current.skeleton.setSkinByName(name)
+  }
+  current.skeleton.setToSetupPose()
+  current.skeleton.updateWorldTransform(SPINE.Physics.update)
+  current.bounds = current.skeleton.getBoundsRect()
+})
+$('anim').addEventListener('change', (e) => {
+  if (!current?.state) return
+  const entry = current.state.setAnimation(0, e.target.value, true)
+  entry.mixDuration = 0
+  meta(`播放中：${e.target.value}`)
+})
+$('speed').addEventListener('input', (e) => {
+  speed = Number(e.target.value)
+  $('speedVal').textContent = speed.toFixed(2) + '×'
+})
+$('play').addEventListener('click', (e) => {
+  paused = !paused
+  e.target.textContent = paused ? '播放' : '暂停'
+})
+$('replay').addEventListener('click', () => {
+  if (!current?.state) return
+  const name = $('anim').value
+  const entry = current.state.setAnimation(0, name, true)
+  entry.mixDuration = 0
+})
+
+fillSelect($('pack'), Object.entries(PACKS).map(([id, p]) => [id, p.label]))
+loadPack('mualani')
+</script>
+</body>
+</html>
