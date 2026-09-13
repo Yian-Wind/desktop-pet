@@ -30,6 +30,9 @@ const ACTION_ANIMATIONS: Record<string, string> = {
 const LOOP_ACTIONS = new Set(['sleep'])
 const LOOP_ANIMATIONS = new Set(['loop', 'loop笑'])
 const IDLE_ANIMATION = ACTION_ANIMATIONS['idle']
+// 待机基底：有自带呼吸/摆动/眨眼的 loop 的包（玛拉妮）用 loop 循环作待机基底并关闭
+// 正弦浮动；没有的包（普罗米娅等）回退 eye + 眨眼定时器重播
+const IDLE_BASE_LOOP_ANIMATION = 'loop'
 const FIT_MARGIN = 1.15
 const DROP_FALL_SECONDS = 0.14
 const DROP_SPRING_SECONDS = 0.32
@@ -107,6 +110,9 @@ interface SpineRuntime {
   bounds: { x: number; y: number; width: number; height: number }
   currentAction: string
   currentAnimationName: string
+  // 待机基底动画：包自带 loop（玛拉妮系，含呼吸/摆动/眨眼）则用 loop 循环并
+  // 关闭正弦浮动；没有 loop 的包回退 eye + 眨眼定时器重播
+  idleBaseAnimation: string
   swayTime: number
   dropSpringTime: number | null
   surfBrake: SurfBrakeState | null
@@ -457,23 +463,34 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
           skeleton.setToSetupPose()
           skeleton.updateWorldTransform(Physics.update)
 
+          // 待机基底：包自带 loop（玛拉妮系，含自然呼吸/摆动/眨眼）→ 循环播放
+          // 并关闭正弦浮动；否则回退 eye 单次 + 眨眼定时器重播（普罗米娅等）
+          const idleBaseAnimation = skeletonData.findAnimation(IDLE_BASE_LOOP_ANIMATION)
+            ? IDLE_BASE_LOOP_ANIMATION
+            : IDLE_ANIMATION
+
           animationState.addListener({
             complete: (entry) => {
               const runtime = runtimeRef.current
-              // 发光呼吸在 track 1 循环，每轮 complete 不参与姿势调度
+              // 发光呼吸在 track 1 循环，每轮 complete 不参与姿势调度；
+              // 循环基底（loop 待机/睡眠呼吸）每轮 complete 同样是 ambient，
+              // 不能当作"动画播完"去复位（否则 5.33s 一次会把基底踢回 eye）；
+              // drag 期间的 eye 单次播放完成后保持停帧（睁眼定格），不复位
               if (entry.animation?.name === GLOW_ANIMATION) return
+              if (entry.loop) return
               if (
                 runtime &&
                 entry.animation?.name !== IDLE_ANIMATION &&
+                entry.animation?.name !== runtime.idleBaseAnimation &&
                 !(runtime.currentAction === 'surf' && !entry.reverse)
               ) {
-                // 睡态待机表演（刃舞）播完回到睡态基底（eye 呼吸），仍在睡眠
+                // 睡态待机表演（刃舞）播完回到睡态基底，仍在睡眠
                 if (
                   entry.animation?.name &&
                   IDLE_SHOW_ANIMATIONS.has(entry.animation.name) &&
                   runtime.currentAction === 'sleep'
                 ) {
-                  animationState.setAnimation(0, IDLE_ANIMATION, false)
+                  animationState.setAnimation(0, runtime.idleBaseAnimation, runtime.idleBaseAnimation !== IDLE_ANIMATION)
                   return
                 }
                 // 姿势动画（背手/解背手）播完停帧保持，轨道与姿势名不回退 idle；
@@ -484,8 +501,8 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
                   return
                 }
                 runtime.currentAction = 'idle'
-                runtime.currentAnimationName = IDLE_ANIMATION
-                animationState.setAnimation(0, IDLE_ANIMATION, false)
+                runtime.currentAnimationName = runtime.idleBaseAnimation
+                animationState.setAnimation(0, runtime.idleBaseAnimation, runtime.idleBaseAnimation !== IDLE_ANIMATION)
               }
             }
           })
@@ -498,6 +515,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
             bounds: skeleton.getBoundsRect(),
             currentAction: '',
             currentAnimationName: '',
+            idleBaseAnimation,
             swayTime: 0,
             dropSpringTime: null,
             surfBrake: null,
@@ -531,12 +549,15 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
           const rootBone = runtime.skeleton.getRootBone()
           // 浮动只让位于拖拽/冲浪等接管 root 的动作；姿势动画（背手/解背手）
           // 不含 root 时间线，播放与停帧期间浮动持续，避免切姿势时浮动消失。
-          // 睡态基底（eye 呼吸）期间保持浮动；刃舞播放中不含 root 时间线，
-          // currentAction='sleep' 同样保留浮动
+          // 当包自带 loop 呼吸基底（玛拉妮）时，浮动正弦与 loop 的摆动叠加会
+          // 打架（双重起伏），故关闭——loop 的 translate 已含自然起伏。
+          // 刃舞播放中不含 root 时间线，currentAction='sleep' 同样保留浮动
+          const floatSway = runtime.idleBaseAnimation === IDLE_ANIMATION
           const floating =
-            runtime.currentAction === 'idle' ||
-            runtime.currentAction === 'sleep' ||
-            (runtime.currentAction === 'click' && POSE_ANIMATIONS.has(runtime.currentAnimationName))
+            floatSway &&
+            (runtime.currentAction === 'idle' ||
+              runtime.currentAction === 'sleep' ||
+              (runtime.currentAction === 'click' && POSE_ANIMATIONS.has(runtime.currentAnimationName)))
           if (floating) {
             const sway = Math.sin(runtime.swayTime * Math.PI)
             if (rootBone) rootBone.rotation = runtime.baseRootRotation + sway * 0.35
@@ -658,7 +679,10 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
     if (runtime.currentAction === 'surf' && state.action === 'idle' && !state.animationName) {
       return
     }
-    let animationName = ACTION_ANIMATIONS[state.action] ?? IDLE_ANIMATION
+    let animationName =
+      state.action === 'idle'
+        ? runtime.idleBaseAnimation
+        : (ACTION_ANIMATIONS[state.action] ?? IDLE_ANIMATION)
     // 显式 animationName（姿势切换/睡眠动画/待机表演）优先——否则 pose 包的 click
     // 会落进随机池（全排除后为空 → 落到不存在的 '抬手示意' → 静默不播，姿势切换失效）
     if (state.animationName) {
@@ -690,9 +714,11 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
       runtime.currentAction = 'sleep'
       return
     }
+    // 待机基底是 loop（非 eye）时循环播放呼吸；eye 基底单次播放、由眨眼定时器重播
     const loop = state.animationName
       ? LOOP_ANIMATIONS.has(animationName)
-      : LOOP_ACTIONS.has(state.action)
+      : (LOOP_ACTIONS.has(state.action) ||
+          (state.action === 'idle' && animationName !== IDLE_ANIMATION))
     if (animationName === '冲浪') {
       runtime.currentAction = 'surf'
       playSurfSequence(runtime)
@@ -732,12 +758,15 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
     let timeout = 0
     const blink = () => {
       const runtime = runtimeRef.current
+      // 循环基底（loop）的包自带眨眼（约每 5.33s 一轮），定时器重播 eye
+      // 反而会踢掉循环轨道——只对 eye 基底的包做定时眨眼
       // 姿势包停帧保持中（拖拽松手/idle 后 action 已回 idle，但 track 仍停在
       // 背手/解背手末帧）：眨眼不得替换 track，否则姿势+大衣被静默冲掉。
       // 待机表演（刃舞）播放中同理跳过——普罗米娅预留的眨眼只是重播 eye，
       // 无真闭眼，掐断表演纯亏
       if (
-        runtime?.currentAction === 'idle' &&
+        runtime?.idleBaseAnimation === IDLE_ANIMATION &&
+        runtime.currentAction === 'idle' &&
         !POSE_ANIMATIONS.has(runtime.currentAnimationName) &&
         !IDLE_SHOW_ANIMATIONS.has(runtime.currentAnimationName)
       ) {
