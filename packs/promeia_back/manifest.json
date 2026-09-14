@@ -5,6 +5,8 @@
   "type": "spine",
   "animations": [
     "eye",
+    "loop",
+    "loop背手",
     "背手",
     "解背手",
     "刃舞"

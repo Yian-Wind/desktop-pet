@@ -30,9 +30,12 @@ const ACTION_ANIMATIONS: Record<string, string> = {
 const LOOP_ACTIONS = new Set(['sleep'])
 const LOOP_ANIMATIONS = new Set(['loop', 'loop笑'])
 const IDLE_ANIMATION = ACTION_ANIMATIONS['idle']
-// 待机基底：有自带呼吸/摆动/眨眼的 loop 的包（玛拉妮）用 loop 循环作待机基底并关闭
-// 正弦浮动；没有的包（普罗米娅等）回退 eye + 眨眼定时器重播
+// 待机基底：有自带呼吸/摆动/眨眼的 loop 的包（玛拉妮、普罗米娅）用 loop 循环
+// 作待机基底并关闭正弦浮动；没有的包回退 eye + 眨眼定时器重播
 const IDLE_BASE_LOOP_ANIMATION = 'loop'
+// 姿势包的背手待机循环（普罗米娅）：背手站姿的待机基底——双手固定背后，
+// 只保留身体/头/马尾摆动并持有 背手 末帧的大衣淡入与网格变形
+const POSE_LOOP_ANIMATION = 'loop背手'
 const FIT_MARGIN = 1.15
 const DROP_FALL_SECONDS = 0.14
 const DROP_SPRING_SECONDS = 0.32
@@ -95,6 +98,22 @@ const GLOW_ANIMATION = '发光呼吸'
 const GLOW_SLOT = 'ponytail_illuminate'
 const GLOW_FADE_SECONDS = 0.6
 
+// 站姿语境：背手站姿 = 背手动画或其待机循环；解背手站姿的循环基底即普通 loop
+function isBackhandStance(animationName: string | null | undefined): boolean {
+  return animationName === GLOW_POSE_ANIMATION || animationName === POSE_LOOP_ANIMATION
+}
+// 姿势语境（含站姿循环）：拖拽保持、睡态保持、idle 归位等分支据此跳过轨道重建
+function isPoseContext(animationName: string | null | undefined): boolean {
+  return !!animationName && (POSE_ANIMATIONS.has(animationName) || animationName === POSE_LOOP_ANIMATION)
+}
+// 当前站姿的待机基底：背手 → loop背手（固定双手+大衣），其余 → 普通循环
+function stanceIdleBase(runtime: SpineRuntime): string {
+  if (runtime.idleBasePoseAnimation && isBackhandStance(runtime.currentAnimationName)) {
+    return runtime.idleBasePoseAnimation
+  }
+  return runtime.idleBaseAnimation
+}
+
 interface SurfBrakeState {
   brakeEntry: TrackEntry
   dismountEntry: TrackEntry
@@ -110,9 +129,12 @@ interface SpineRuntime {
   bounds: { x: number; y: number; width: number; height: number }
   currentAction: string
   currentAnimationName: string
-  // 待机基底动画：包自带 loop（玛拉妮系，含呼吸/摆动/眨眼）则用 loop 循环并
+  // 待机基底动画：包自带 loop（含呼吸/摆动/眨眼）则用 loop 循环并
   // 关闭正弦浮动；没有 loop 的包回退 eye + 眨眼定时器重播
   idleBaseAnimation: string
+  // 背手站姿的待机基底（loop背手）：仅姿势包（背手/解背手/loop背手 齐备），
+  // null = 无站姿循环（背手停帧保持，不走姿势→循环切换）
+  idleBasePoseAnimation: string | null
   swayTime: number
   dropSpringTime: number | null
   surfBrake: SurfBrakeState | null
@@ -300,8 +322,9 @@ function applyPonytailGlow(runtime: SpineRuntime): void {
   if (!slot) return
   if (!runtime.skeleton.data.findAnimation(GLOW_ANIMATION)) return
 
-  // 马尾发光呼吸：仅背手姿势保持期间 track 1 循环"发光呼吸"（槽位 alpha 正弦）
-  const wantGlow = runtime.currentAnimationName === GLOW_POSE_ANIMATION
+  // 马尾发光呼吸：背手站姿保持期间（背手动画或 loop背手 循环）track 1 循环
+  // "发光呼吸"（槽位 alpha 正弦）
+  const wantGlow = isBackhandStance(runtime.currentAnimationName)
   if (wantGlow) {
     // 淡出中又回到背手：取消淡出，重新从头循环
     if (runtime.glowState?.fading) runtime.glowState = null
@@ -463,11 +486,18 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
           skeleton.setToSetupPose()
           skeleton.updateWorldTransform(Physics.update)
 
-          // 待机基底：包自带 loop（玛拉妮系，含自然呼吸/摆动/眨眼）→ 循环播放
-          // 并关闭正弦浮动；否则回退 eye 单次 + 眨眼定时器重播（普罗米娅等）
+          // 待机基底：包自带 loop（含自然呼吸/摆动/眨眼）→ 循环播放
+          // 并关闭正弦浮动；否则回退 eye 单次 + 眨眼定时器重播
           const idleBaseAnimation = skeletonData.findAnimation(IDLE_BASE_LOOP_ANIMATION)
             ? IDLE_BASE_LOOP_ANIMATION
             : IDLE_ANIMATION
+          // 姿势包站姿循环：背手/解背手/loop背手 齐备时，待机基底随站姿切换
+          const idleBasePoseAnimation =
+            skeletonData.findAnimation(POSE_LOOP_ANIMATION) &&
+            skeletonData.findAnimation('背手') &&
+            skeletonData.findAnimation('解背手')
+              ? POSE_LOOP_ANIMATION
+              : null
 
           animationState.addListener({
             complete: (entry) => {
@@ -493,10 +523,18 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
                   animationState.setAnimation(0, runtime.idleBaseAnimation, runtime.idleBaseAnimation !== IDLE_ANIMATION)
                   return
                 }
-                // 姿势动画（背手/解背手）播完停帧保持，轨道与姿势名不回退 idle；
-                // 但行为上要归位 idle，否则浮动要等行为引擎分钟 tick 才恢复。
-                // 仅在仍处 click 语境时归位：播放期间被 drag 打断则保持 drag 状态
+                // 姿势动画（背手/解背手）播完：有站姿循环的包直接切入对应站姿的
+                // 待机基底（背手→loop背手，解背手→loop），不停帧；无站姿循环的包
+                // 维持停帧保持。行为上归位 idle（仅 click 语境），否则浮动要等
+                // 行为引擎分钟 tick 才恢复
                 if (entry.animation?.name && POSE_ANIMATIONS.has(entry.animation.name)) {
+                  if (runtime.idleBasePoseAnimation) {
+                    const base = stanceIdleBase(runtime)
+                    runtime.currentAnimationName = base
+                    // 短混合抚平 解背手末帧(setup) → loop首帧(循环中心平移) 的瞬切
+                    const stanceEntry = runtime.state.setAnimation(0, base, true)
+                    stanceEntry.mixDuration = 0.25
+                  }
                   if (runtime.currentAction === 'click') runtime.currentAction = 'idle'
                   return
                 }
@@ -516,6 +554,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
             currentAction: '',
             currentAnimationName: '',
             idleBaseAnimation,
+            idleBasePoseAnimation,
             swayTime: 0,
             dropSpringTime: null,
             surfBrake: null,
@@ -629,9 +668,9 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
     if (!runtime || !ready) return
 
     if (state.action === 'drag') {
-      // 普罗米娅姿势包：拖动保持当前姿势停帧（背手=大衣在身/正常=无大衣），
+      // 普罗米娅姿势包：拖动保持当前姿势（背手=大衣在身/loop背手 循环/正常=无大衣），
       // 不清轨道不回 setup——拖动只换闭眼头表情，松手后姿势原样
-      const isPosePose = POSE_ANIMATIONS.has(runtime.currentAnimationName)
+      const isPosePose = isPoseContext(runtime.currentAnimationName)
       if (isPosePose) {
         runtime.currentAction = 'drag'
         return
@@ -679,6 +718,20 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
     if (runtime.currentAction === 'surf' && state.action === 'idle' && !state.animationName) {
       return
     }
+    // 气泡隐藏等主进程重发：state.animationName 仍挂着已播完的姿势切换名
+    // （animationName 只在 handle() 入口清空，气泡超时不清），而姿势已由
+    // complete 监听切到站姿循环。旧停帧方案靠"currentAnimationName=姿势名"
+    // 命中下方姿势保持守卫；切入循环后 loop 不再命中，过期重发会落进
+    // 姿势切换重置分支重播姿势动画（解背手站姿 5s 后闪过切换动作）
+    if (
+      state.action === 'idle' &&
+      state.animationName && POSE_ANIMATIONS.has(state.animationName) &&
+      (runtime.currentAnimationName === runtime.idleBaseAnimation ||
+        runtime.currentAnimationName === runtime.idleBasePoseAnimation)
+    ) {
+      runtime.currentAction = 'idle'
+      return
+    }
     let animationName =
       state.action === 'idle'
         ? runtime.idleBaseAnimation
@@ -702,14 +755,14 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
       lastClickAnimationRef.current = animationName
     }
     if (!runtime.skeleton.data.findAnimation(animationName)) return
-    // 睡态保持姿势停帧：入睡不改变站姿（背手/解背手停帧原样过夜），
+    // 睡态保持姿势：入睡不改变站姿（背手/解背手 或其站姿循环原样过夜），
     // 只叠加发光等睡态光效。此前睡态基底（eye）会直接冲掉姿势停帧
     // 露出普通站姿 + 发光，表现为"解背手状态下头发莫名发光"。
     // 显式 animationName（睡态轮播的刃舞等）不受此守卫影响。
     if (
       state.action === 'sleep' &&
       !state.animationName &&
-      POSE_ANIMATIONS.has(runtime.currentAnimationName)
+      isPoseContext(runtime.currentAnimationName)
     ) {
       runtime.currentAction = 'sleep'
       return
@@ -724,9 +777,9 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
       playSurfSequence(runtime)
       return
     }
-    // 姿势包的 drag-end：保持停帧姿势，不回 idle eye（否则覆盖背手站姿）。
+    // 姿势包的 drag-end：保持当前站姿，不回 idle eye（否则覆盖背手站姿）。
     // 例外：待机表演（刃舞）要接替姿势停帧——解背手末帧即 setup，清轨后开播
-    if (state.action === 'idle' && POSE_ANIMATIONS.has(runtime.currentAnimationName)) {
+    if (state.action === 'idle' && isPoseContext(runtime.currentAnimationName)) {
       if (!(state.animationName && IDLE_SHOW_ANIMATIONS.has(state.animationName))) {
         runtime.currentAction = 'idle'
         return
@@ -734,7 +787,7 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
       runtime.state.clearTrack(0)
       runtime.skeleton.setToSetupPose()
     }
-    if (state.action === 'click' || (state.animationName && POSE_ANIMATIONS.has(state.animationName))) {
+    if (state.action === 'click' || (state.animationName && isPoseContext(state.animationName))) {
       // 姿势切换与点击同一重置路径：清轨道 + 回 setup（防上一姿势残留叠加）
       runtime.state.clearTrack(0)
       runtime.skeleton.setToSetupPose()
