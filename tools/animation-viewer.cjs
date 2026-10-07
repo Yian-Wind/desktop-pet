@@ -7,6 +7,7 @@
   /                       → tools/animation-viewer.html
   /runtime/spine-webgl.js → node_modules 官方 4.2 iife 运行时
   /packs/<pack>/<file>    → packs/<pack>/<file>（白名单目录，防穿越）
+  /reference/<dir>/<file> → pet_reference/<dir>/<file>（同上，参考骨架用）
 */
 const http = require('http')
 const fs = require('fs')
@@ -44,6 +45,14 @@ const server = http.createServer((req, res) => {
       const rel = path.normalize(decodeURIComponent(p.slice('/packs/'.length)))
       const abs = path.join(ROOT, 'packs', rel)
       if (!abs.startsWith(path.join(ROOT, 'packs')) || !fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+        return send(res, 404, 'not found', 'text/plain')
+      }
+      return send(res, 200, fs.readFileSync(abs), MIME[path.extname(abs).toLowerCase()] || 'application/octet-stream')
+    }
+    if (p.startsWith('/reference/')) {
+      const rel = path.normalize(decodeURIComponent(p.slice('/reference/'.length)))
+      const abs = path.join(ROOT, 'pet_reference', rel)
+      if (!abs.startsWith(path.join(ROOT, 'pet_reference')) || !fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
         return send(res, 404, 'not found', 'text/plain')
       }
       return send(res, 200, fs.readFileSync(abs), MIME[path.extname(abs).toLowerCase()] || 'application/octet-stream')

@@ -31,3 +31,7 @@ __pycache__/
 
 # ZCode session
 .zcode/
+
+# 动画预览帧与临时工作目录（本地验证产物）
+preview-frames/
+tools/tmp/

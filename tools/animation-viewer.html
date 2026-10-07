@@ -28,12 +28,11 @@
 </div>
 <canvas id="stage" width="520" height="560"></canvas>
 <div id="meta">loading…</div>
-<div class="hint">玛拉妮默认皮肤 default+left（与应用一致，朝左）；promeia_back 仅 default。物理约束（physics）按官方 4.2 运行时模拟。</div>
+<div class="hint">玛拉妮默认皮肤 default+left（与应用一致，朝左）；promeia_back 仅 default。开拓者来自 pet_reference 原始导出（仅预览，尚未接入应用）；其 emoji_0/3/4 源数据逐字节相同（导出即重复），效果为 t≈1.33–1.67s 的一次短促面部变形。物理约束（physics）按官方 4.2 运行时模拟。</div>
 <script src="/runtime/spine-webgl.js"></script>
 <script>
 const SPINE = window.spine
 const PORT = location.port || '8137'
-const BASE = `http://127.0.0.1:${PORT}/packs/`
 const FIT_MARGIN = 1.15
 
 const PACKS = {
@@ -46,6 +45,19 @@ const PACKS = {
     label: '普罗米娅（promeia_back）',
     skeleton: 'promiya_back.json', atlas: 'sp.atlas',
     skins: ['default']
+  },
+  '开拓者': {
+    label: '开拓者（Trailblazer · pet_reference）',
+    base: '/reference/',
+    skeleton: '8002.2c35ebdc.json', atlas: '8002.atlas',
+    skins: ['default'],
+    defaultAnim: 'idel'
+  },
+  trailblazer: {
+    label: '开拓者（packs/trailblazer 接入版）',
+    skeleton: 'trailblazer.json', atlas: 'trailblazer.atlas',
+    skins: ['default'],
+    defaultAnim: 'idel'
   }
 }
 
@@ -71,6 +83,7 @@ function fillSelect(sel, items) {
 function loadPack(packId) {
   if (current) { current.canvas.dispose(); current = null }
   const pack = PACKS[packId]
+  const BASE = `http://127.0.0.1:${PORT}${pack.base || '/packs/'}${packId}/`
   meta(`加载 ${pack.label} …`)
   fillSelect($('skin'), pack.skins.map((s) => [s, s]))
   const skinName = pack.skins[0]
@@ -79,12 +92,12 @@ function loadPack(packId) {
     webglConfig: { alpha: true, antialias: true },
     app: {
       loadAssets(c) {
-        c.assetManager.loadJson(BASE + packId + '/' + pack.skeleton)
-        c.assetManager.loadTextureAtlas(BASE + packId + '/' + pack.atlas)
+        c.assetManager.loadJson(BASE + pack.skeleton)
+        c.assetManager.loadTextureAtlas(BASE + pack.atlas)
       },
       initialize(c) {
-        const atlas = c.assetManager.require(BASE + packId + '/' + pack.atlas)
-        const json = c.assetManager.require(BASE + packId + '/' + pack.skeleton)
+        const atlas = c.assetManager.require(BASE + pack.atlas)
+        const json = c.assetManager.require(BASE + pack.skeleton)
         const data = new SPINE.SkeletonJson(new SPINE.AtlasAttachmentLoader(atlas)).readSkeletonData(json)
         const skeleton = new SPINE.Skeleton(data)
         if (skinName.startsWith('default+left')) {
@@ -107,7 +120,8 @@ function loadPack(packId) {
 
         const names = data.animations.map((a) => a.name).sort((a, b) => a.localeCompare(b, 'zh'))
         fillSelect($('anim'), names.map((n) => [n, n]))
-        const first = names.includes('打瞌睡') ? '打瞌睡' : names[0]
+        const first = (pack.defaultAnim && names.includes(pack.defaultAnim)) ? pack.defaultAnim
+          : names.includes('打瞌睡') ? '打瞌睡' : names[0]
         $('anim').value = first
         const entry = state.setAnimation(0, first, true)
         entry.mixDuration = 0
