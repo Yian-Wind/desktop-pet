@@ -1,5 +1,8 @@
 import { DEFAULT_CORPUS } from '../shared/defaults'
-import { IDLE_SHOW_ANIMATIONS, SLEEP_EXCLUDED_ANIMATIONS } from '../shared/animation-pool'
+import {
+  BIN_ESCAPE_ANIMATION, BIN_PEEK_ACTIVE_SECONDS, BIN_PEEK_ANIMATION,
+  IDLE_SHOW_ANIMATIONS, SLEEP_EXCLUDED_ANIMATIONS
+} from '../shared/animation-pool'
 import type { CorpusConfig, PetEvent, PetPack, PetWindowState } from '../shared/types'
 function pick(arr: string[] | undefined): string | null {
   if (!arr || arr.length === 0) return null
@@ -30,6 +33,13 @@ export class BehaviorEngine {
   private lastSleepAnimationName: string | null = null
   // 姿势切换状态：true = 背手（下一次点击播 解背手）
   private poseToggled = false
+  // 垃圾桶包（开拓者）睡态快捷按钮：张望一次后气泡隐藏回桶内待机而非唤醒
+  private peekWhileSleeping = false
+  // 张望激活窗口：期间再次点击（wake）→ 脱离垃圾桶；超时自动回桶内待机
+  private binPeekActive = false
+  // 桶内拖动：拖动期间保持睡态（渲染端沿用桶动画），松手触发顶盖张望
+  private dragWhileSleeping = false
+  private binPeekTimer?: ReturnType<typeof setTimeout>
   private sleepAnimationIntervalSeconds = 30
   private bubbleDurationSeconds = 5
   private bubbleTimer?: NodeJS.Timeout
@@ -43,6 +53,9 @@ export class BehaviorEngine {
     if (this.idleTimer) clearInterval(this.idleTimer)
     this.stopSleepAnimationTimer()
     this.stopIdleShowTimer()
+    this.stopBinPeekState()
+    this.peekWhileSleeping = false
+    this.dragWhileSleeping = false
     this.currentPack = pack
     this.lastSleepAnimationName = null
     this.poseToggled = false
@@ -90,10 +103,17 @@ export class BehaviorEngine {
   }
 
   async handle(event: PetEvent): Promise<void> {
+    if (process.env.PET_DEBUG_BE === '1') {
+      console.log('[be] event=' + event.type + ' before(action=' + this.state.action +
+        ' anim=' + (this.state.animationName ?? '-') + ' peek=' + this.binPeekActive + ')')
+    }
     // 刃舞表演期间忽略分钟级 tick（idle/sleep 的 nonce/animationName 重置都会
     // 掐断表演——入睡后每分钟的 tick 派发的是 sleep 事件，同样要挡）
     if ((event.type === 'idle' || event.type === 'sleep') && this.state.animationName &&
         IDLE_SHOW_ANIMATIONS.has(this.state.animationName)) return
+    // 60s 周期 sleep tick 落在张望期间：不打断（张望播完自然回桶内待机）
+    if ((event.type === 'idle' || event.type === 'sleep') &&
+        this.state.animationName === BIN_PEEK_ANIMATION) return
     if (event.type !== 'idle' && event.type !== 'sleep') this.idleMinutes = 0
     if (event.type !== 'sleep') this.stopSleepAnimationTimer()
     this.state.actionNonce += 1
@@ -114,11 +134,30 @@ export class BehaviorEngine {
         break
       }
       case 'drag-start':
+        // 垃圾桶包：睡态拖动保持桶状态（渲染端沿用桶动画，不做拖拽换动画）
+        if (this.state.action === 'sleep' && this.binPeekAvailable()) {
+          this.dragWhileSleeping = true
+          this.state.emotion = 'sleepy'
+          this.hideBubble()
+          break
+        }
         this.state.action = 'drag'
         this.state.emotion = 'excited'
         this.hideBubble()
         break
       case 'drag-end':
+        // 桶内松手：不回待机，直接顶盖张望看看被放到哪了
+        if (this.dragWhileSleeping) {
+          this.dragWhileSleeping = false
+          if (this.state.action === 'sleep' && this.binPeekAvailable()) {
+            this.startBinPeekState()
+            this.state.action = 'sleep'
+            this.state.emotion = 'sleepy'
+            this.state.animationName = BIN_PEEK_ANIMATION
+            this.showBubble(pick(phrases['drag-end']) ?? '飞起来啦！')
+            break
+          }
+        }
         this.state.action = 'idle'
         this.showBubble(pick(phrases['drag-end']) ?? '飞起来啦！')
         break
@@ -128,16 +167,38 @@ export class BehaviorEngine {
         this.state.emotion = 'sleepy'
         this.showBubble(pick(phrases.sleep) ?? 'Zzz…')
         break
-      case 'cheer':
+      case 'cheer': {
+        // 垃圾桶包：睡眠态快捷按钮不唤醒——顶盖张望一次（animationName 通道），
+        // 气泡隐藏回桶内待机（hideBubble 的 peekWhileSleeping 分支）
+        if (this.state.action === 'sleep' && this.binPeekAvailable()) {
+          this.state.action = 'sleep'
+          this.state.emotion = 'sleepy'
+          this.state.animationName = BIN_PEEK_ANIMATION
+          this.peekWhileSleeping = true
+          this.startBinPeekState()
+          this.showBubble(typeof event.payload?.text === 'string' ? event.payload.text : '今日待办推荐！')
+          break
+        }
         this.state.action = 'cheer'
         this.state.emotion = 'excited'
         this.showBubble(typeof event.payload?.text === 'string' ? event.payload.text : '今日待办推荐！')
         break
-      case 'alarm':
+      }
+      case 'alarm': {
+        if (this.state.action === 'sleep' && this.binPeekAvailable()) {
+          this.state.action = 'sleep'
+          this.state.emotion = 'sleepy'
+          this.state.animationName = BIN_PEEK_ANIMATION
+          this.peekWhileSleeping = true
+          this.startBinPeekState()
+          this.showBubble(typeof event.payload?.text === 'string' ? event.payload.text : '闹钟已设置')
+          break
+        }
         this.state.action = 'alarm'
         this.state.emotion = 'neutral'
         this.showBubble(typeof event.payload?.text === 'string' ? event.payload.text : '闹钟已设置')
         break
+      }
       case 'idle': {
         this.state.action = 'idle'
         this.state.emotion = 'neutral'
@@ -154,10 +215,30 @@ export class BehaviorEngine {
         break
       }
       case 'wake':
-      default:
+      default: {
+        const wasSleeping = this.state.action === 'sleep'
+        // 垃圾桶包睡态点击：首次 → 顶盖张望（仍在桶内）；张望期间再点击 → 跳出炸开
+        if (wasSleeping && this.binPeekAvailable()) {
+          if (this.binPeekActive) {
+            this.stopBinPeekState()
+            this.state.action = 'idle'
+            this.state.emotion = 'neutral'
+            this.state.animationName = BIN_ESCAPE_ANIMATION
+            this.showBubble(pick(phrases.wake) ?? '我醒啦！')
+            break
+          }
+          this.startBinPeekState()
+          this.state.action = 'sleep'
+          this.state.emotion = 'sleepy'
+          this.state.animationName = BIN_PEEK_ANIMATION
+          this.showBubble(pick(phrases.click) ?? '嗯？')
+          break
+        }
         this.state.action = 'idle'
         this.state.emotion = 'neutral'
         this.showBubble(pick(phrases.wake) ?? '我醒啦！')
+        break
+      }
     }
     // 待机表演定时器生命周期：睡眠态（长待机）挂载——刃舞等表演在睡态轮播；
     // 醒/普通待机/交互撤下。click/drag 是短时动作（下一事件会重挂），
@@ -166,6 +247,9 @@ export class BehaviorEngine {
       if (!this.idleShowTimer && !this.idleShowClearTimer) this.startIdleShowTimer()
     } else if (this.state.action !== 'click' && this.state.action !== 'drag') {
       this.stopIdleShowTimer()
+    }
+    if (process.env.PET_DEBUG_BE === '1') {
+      console.log('[be] after action=' + this.state.action + ' anim=' + (this.state.animationName ?? '-'))
     }
     this.emit()
   }
@@ -187,6 +271,29 @@ export class BehaviorEngine {
       this.hideBubble()
       this.bubbleTimer = undefined
     }, this.bubbleDurationSeconds * 1000)
+  }
+
+  // 垃圾桶包判定：暴露 顶盖张望 即支持睡态张望交互
+  private binPeekAvailable(): boolean {
+    return this.currentPack?.manifest.animations.includes(BIN_PEEK_ANIMATION) ?? false
+  }
+
+  // 张望激活窗口：动画时长内再次点击=脱离；超时窗口关闭，之后的点击重新触发张望
+  private startBinPeekState(): void {
+    if (this.binPeekTimer) clearTimeout(this.binPeekTimer)
+    this.binPeekActive = true
+    this.binPeekTimer = setTimeout(() => {
+      this.binPeekTimer = undefined
+      this.binPeekActive = false
+    }, BIN_PEEK_ACTIVE_SECONDS * 1000)
+  }
+
+  private stopBinPeekState(): void {
+    if (this.binPeekTimer) {
+      clearTimeout(this.binPeekTimer)
+      this.binPeekTimer = undefined
+    }
+    this.binPeekActive = false
   }
 
   private startSleepAnimationTimer(): void {
@@ -299,6 +406,16 @@ export class BehaviorEngine {
     this.state.bubbleVisible = false
     // cheer/alarm/click reactions exist for their bubble; once it hides the pet
     // returns to idle so sprite reactions (e.g. Promeia's closed eyes) reset.
+    // 垃圾桶包睡态张望：气泡隐藏后回桶内待机（不唤醒）；注意不改
+    // animationName/nonce——渲染端依赖不变则不会重播
+    if (this.peekWhileSleeping) {
+      this.peekWhileSleeping = false
+      if (this.state.action === 'cheer' || this.state.action === 'alarm') {
+        this.state.action = 'sleep'
+        this.emit()
+        return
+      }
+    }
     if (
       this.state.action === 'cheer' || this.state.action === 'alarm' ||
       this.state.action === 'click'

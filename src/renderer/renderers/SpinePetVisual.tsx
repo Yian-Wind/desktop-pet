@@ -11,9 +11,12 @@ import {
   Skin,
   SpineCanvas
 } from '@esotericsoftware/spine-webgl'
-import type { TextureAtlas, TrackEntry } from '@esotericsoftware/spine-webgl'
+import type { Attachment, TextureAtlas, TrackEntry } from '@esotericsoftware/spine-webgl'
 import type { PetPack, PetWindowState } from '../../shared/types'
-import { CLICK_EXCLUDED_ANIMATIONS, IDLE_SHOW_ANIMATIONS, POSE_ANIMATIONS } from '../../shared/animation-pool'
+import {
+  BIN_ANIMATIONS, BIN_ESCAPE_ANIMATION, BIN_INTRO_ANIMATION, BIN_LOOP_ANIMATION,
+  BIN_PEEK_ANIMATION, CLICK_EXCLUDED_ANIMATIONS, IDLE_SHOW_ANIMATIONS, POSE_ANIMATIONS
+} from '../../shared/animation-pool'
 import type { PetHitTest, PetVisualBounds } from './PetVisual'
 
 const ACTION_ANIMATIONS: Record<string, string> = {
@@ -129,9 +132,11 @@ interface SpineRuntime {
   bounds: { x: number; y: number; width: number; height: number }
   currentAction: string
   currentAnimationName: string
-  // 待机基底动画：包自带 loop（含呼吸/摆动/眨眼）则用 loop 循环并
-  // 关闭正弦浮动；没有 loop 的包回退 eye + 眨眼定时器重播
+  // 待机基底动画：manifest.actions.idleBase 显式指定 > 包自带 loop（含呼吸/
+  // 摆动/眨眼）循环并关闭正弦浮动 > 回退 eye + 眨眼定时器重播
   idleBaseAnimation: string
+  // per-pack 动作映射（manifest.actions 合并渲染端默认值），见 PetPackManifest
+  actionAnimations: Record<string, string>
   // 背手站姿的待机基底（loop背手）：仅姿势包（背手/解背手/loop背手 齐备），
   // null = 无站姿循环（背手停帧保持，不走姿势→循环切换）
   idleBasePoseAnimation: string | null
@@ -166,6 +171,30 @@ function createCombinedSkin(skeleton: Skeleton): Skin | null {
   combinedSkin.addSkin(defaultSkin)
   combinedSkin.addSkin(directionSkin)
   return combinedSkin
+}
+
+// 相机包围盒按"默认可见几何"计算：manifest.cameraExcludeSlots 列出的常驻
+// 隐藏道具槽位（如开拓者的垃圾桶三层）临时摘除附件后测量——运行时 getBounds
+// 不检查 alpha，会把这些槽位算进包围盒导致相机缩远、角色变小。
+// 未声明该字段的包行为与从前完全一致。
+function getDefaultVisibleBounds(
+  skeleton: Skeleton,
+  excludeSlots: string[]
+): { x: number; y: number; width: number; height: number } {
+  const hidden: Array<{ slot: NonNullable<ReturnType<Skeleton['findSlot']>>; attachment: Attachment }> = []
+  for (const name of excludeSlots) {
+    const slot = skeleton.findSlot(name)
+    const attachment = slot?.getAttachment()
+    if (slot && attachment) {
+      hidden.push({ slot, attachment })
+      slot.setAttachment(null)
+    }
+  }
+  const bounds = skeleton.getBoundsRect()
+  for (const { slot, attachment } of hidden) {
+    slot.setAttachment(attachment)
+  }
+  return bounds
 }
 
 function applyStructuralDropSpring(runtime: SpineRuntime, delta: number): void {
@@ -443,6 +472,11 @@ function playSurfSequence(runtime: SpineRuntime): void {
   }
 }
 
+// 调试日志开关（窗口 URL ?debugBe=1，由主进程 PET_DEBUG_BE 注入）
+const DEBUG_BE =
+  typeof window !== 'undefined' &&
+  new URLSearchParams(window.location.search).get('debugBe') === '1'
+
 export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, onHitTestReady }: SpinePetVisualProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const spineCanvasRef = useRef<SpineCanvas | null>(null)
@@ -486,11 +520,16 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
           skeleton.setToSetupPose()
           skeleton.updateWorldTransform(Physics.update)
 
-          // 待机基底：包自带 loop（含自然呼吸/摆动/眨眼）→ 循环播放
-          // 并关闭正弦浮动；否则回退 eye 单次 + 眨眼定时器重播
-          const idleBaseAnimation = skeletonData.findAnimation(IDLE_BASE_LOOP_ANIMATION)
-            ? IDLE_BASE_LOOP_ANIMATION
-            : IDLE_ANIMATION
+          // 待机基底：manifest.actions.idleBase 显式指定（骨架里存在才生效）>
+          // 包自带 loop（含自然呼吸/摆动/眨眼）→ 循环播放并关闭正弦浮动；
+          // 否则回退 eye 单次 + 眨眼定时器重播
+          const packActions = pack.manifest.actions ?? {}
+          const idleBaseAnimation =
+            packActions.idleBase && skeletonData.findAnimation(packActions.idleBase)
+              ? packActions.idleBase
+              : skeletonData.findAnimation(IDLE_BASE_LOOP_ANIMATION)
+                ? IDLE_BASE_LOOP_ANIMATION
+                : IDLE_ANIMATION
           // 姿势包站姿循环：背手/解背手/loop背手 齐备时，待机基底随站姿切换
           const idleBasePoseAnimation =
             skeletonData.findAnimation(POSE_LOOP_ANIMATION) &&
@@ -508,6 +547,17 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
               // drag 期间的 eye 单次播放完成后保持停帧（睁眼定格），不复位
               if (entry.animation?.name === GLOW_ANIMATION) return
               if (entry.loop) return
+              // 垃圾桶状态机：入桶/顶盖张望播完由 addAnimation 队列接桶内
+              // 待机循环（保持睡眠，不走通用归位）；跳出炸开放行给通用分支
+              if (
+                runtime &&
+                entry.animation?.name &&
+                BIN_ANIMATIONS.has(entry.animation.name) &&
+                entry.animation.name !== BIN_ESCAPE_ANIMATION
+              ) {
+                runtime.currentAnimationName = BIN_LOOP_ANIMATION
+                return
+              }
               if (
                 runtime &&
                 entry.animation?.name !== IDLE_ANIMATION &&
@@ -550,10 +600,11 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
             skeleton,
             state: animationState,
             spineCanvas: canvas,
-            bounds: skeleton.getBoundsRect(),
+            bounds: getDefaultVisibleBounds(skeleton, pack.manifest.cameraExcludeSlots ?? []),
             currentAction: '',
             currentAnimationName: '',
             idleBaseAnimation,
+            actionAnimations: { ...ACTION_ANIMATIONS, ...packActions },
             idleBasePoseAnimation,
             swayTime: 0,
             dropSpringTime: null,
@@ -639,6 +690,17 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
           renderer.begin()
           renderer.drawSkeleton(runtime.skeleton, false)
           renderer.end()
+          if (DEBUG_BE) {
+            const rt = runtimeRef.current
+            const heartbeat = (rt as unknown as { _dbgFrames?: number })
+            heartbeat._dbgFrames = (heartbeat._dbgFrames ?? 0) + 1
+            if (heartbeat._dbgFrames % 120 === 0) {
+              const cur = rt?.state.getCurrent(0)
+              console.log('[spine] hb frames=' + heartbeat._dbgFrames +
+                ' anim=' + (cur?.animation ? cur.animation.name + '@' + cur.trackTime.toFixed(2) : 'NONE') +
+                ' action=' + (rt?.currentAction ?? '-') + ' name=' + (rt?.currentAnimationName ?? '-'))
+            }
+          }
         },
         error(canvas, errors) {
           if (disposed) return
@@ -676,11 +738,17 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
         return
       }
       if (runtime.currentAction !== 'drag' || runtime.dropSpringTime !== null) {
-        runtime.state.clearTrack(0)
-        runtime.skeleton.setToSetupPose()
-        runtime.currentAction = 'drag'
-        runtime.currentAnimationName = ACTION_ANIMATIONS['drag']
-        runtime.state.setAnimation(0, ACTION_ANIMATIONS['drag'], false)
+        const dragAnimation = runtime.actionAnimations['drag'] ?? ACTION_ANIMATIONS['drag']
+        if (runtime.skeleton.data.findAnimation(dragAnimation)) {
+          runtime.state.clearTrack(0)
+          runtime.skeleton.setToSetupPose()
+          runtime.currentAction = 'drag'
+          runtime.currentAnimationName = dragAnimation
+          runtime.state.setAnimation(0, dragAnimation, false)
+        } else {
+          // 无拖拽专属表情的包（如开拓者）：保持当前画面，只记账动作
+          runtime.currentAction = 'drag'
+        }
       }
       runtime.dropSpringTime = null
       runtime.surfBrake = null
@@ -718,6 +786,15 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
     if (runtime.currentAction === 'surf' && state.action === 'idle' && !state.animationName) {
       return
     }
+    // 跳出炸开播放中：分钟级 idle tick / 气泡隐藏不打断（同冲浪守卫），
+    // 播完由 complete 监听归位普通待机
+    if (
+      runtime.currentAction === 'wake' &&
+      runtime.currentAnimationName === BIN_ESCAPE_ANIMATION &&
+      state.action === 'idle' && !state.animationName
+    ) {
+      return
+    }
     // 气泡隐藏等主进程重发：state.animationName 仍挂着已播完的姿势切换名
     // （animationName 只在 handle() 入口清空，气泡超时不清），而姿势已由
     // complete 监听切到站姿循环。旧停帧方案靠"currentAnimationName=姿势名"
@@ -735,14 +812,17 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
     let animationName =
       state.action === 'idle'
         ? runtime.idleBaseAnimation
-        : (ACTION_ANIMATIONS[state.action] ?? IDLE_ANIMATION)
+        : (runtime.actionAnimations[state.action] ?? IDLE_ANIMATION)
     // 显式 animationName（姿势切换/睡眠动画/待机表演）优先——否则 pose 包的 click
     // 会落进随机池（全排除后为空 → 落到不存在的 '抬手示意' → 静默不播，姿势切换失效）
     if (state.animationName) {
       animationName = state.animationName
     } else if (state.action === 'sleep' && !runtime.skeleton.data.findAnimation(animationName)) {
-      // 睡态基底动画（如 loop）在姿势包里不存在：回退 eye 呼吸，避免入睡死寂
-      animationName = IDLE_ANIMATION
+      // 睡态基底动画（如 loop）在该包不存在：回退 eye 呼吸；eye 也没有的包
+      // （开拓者）回待机基底，避免入睡后轨道空置
+      animationName = runtime.skeleton.data.findAnimation(IDLE_ANIMATION)
+        ? IDLE_ANIMATION
+        : runtime.idleBaseAnimation
     } else if (state.action === 'click') {
       const choices = pack.manifest.animations.filter((name) => {
         return !CLICK_EXCLUDED_ANIMATIONS.has(name) && runtime.skeleton.data.findAnimation(name) !== null
@@ -753,6 +833,33 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
       const pool = nonRepeatingChoices.length > 0 ? nonRepeatingChoices : choices
       animationName = pool[Math.floor(Math.random() * pool.length)] ?? ACTION_ANIMATIONS['click']
       lastClickAnimationRef.current = animationName
+    }
+    // 垃圾桶状态机（开拓者）：入桶/顶盖张望一次性播放并由 addAnimation 队列
+    // 接桶内待机循环；跳出炸开一次性播放（播完由 complete 监听归位普通待机）。
+    // 幂等按类型区分：已在桶内时只跳过重复的"入桶"（睡眠轮播/重复 sleep 事件）；
+    // "顶盖张望"恰恰要在桶内才播（不在桶内则忽略，避免突兀缩小现形）
+    if (BIN_ANIMATIONS.has(animationName)) {
+      if (animationName === BIN_ESCAPE_ANIMATION) {
+        runtime.currentAction = 'wake'
+        runtime.currentAnimationName = BIN_ESCAPE_ANIMATION
+        const escape = runtime.state.setAnimation(0, BIN_ESCAPE_ANIMATION, false)
+        escape.mixDuration = 0.1
+        return
+      }
+      const inBin =
+        runtime.currentAction === 'sleep' && BIN_ANIMATIONS.has(runtime.currentAnimationName)
+      if (animationName === BIN_PEEK_ANIMATION) {
+        if (!inBin) return
+      } else if (inBin) {
+        return
+      }
+      const peek = animationName === BIN_PEEK_ANIMATION
+      runtime.currentAction = 'sleep'
+      runtime.currentAnimationName = peek ? BIN_PEEK_ANIMATION : BIN_INTRO_ANIMATION
+      const first = runtime.state.setAnimation(0, runtime.currentAnimationName, false)
+      first.mixDuration = 0.15
+      runtime.state.addAnimation(0, BIN_LOOP_ANIMATION, true, 0)
+      return
     }
     if (!runtime.skeleton.data.findAnimation(animationName)) return
     // 睡态保持姿势：入睡不改变站姿（背手/解背手 或其站姿循环原样过夜），

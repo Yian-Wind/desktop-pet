@@ -77,7 +77,8 @@ body.pet-mode, .pet-root {
 
 .pet-bubble {
   position: absolute;
-  bottom: calc(100% - var(--pet-visual-top, var(--pet-stage-inset)) + 12px);
+  /* 气泡整体上提：与宠物可视区顶部留更多间隙（原 +12px → +46px） */
+  bottom: calc(100% - var(--pet-visual-top, var(--pet-stage-inset)) + 46px);
   left: 50%;
   transform: translateX(-50%);
   max-width: 86%;

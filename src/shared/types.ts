@@ -22,6 +22,18 @@ export interface PetPackManifest {
   author?: string
   persona?: PersonaConfig
   assetPaths?: Record<string, string>
+  /**
+   * per-pack 动作映射（ROADMAP M2）：action → 骨架动画名。
+   * 键与渲染端 ACTION_ANIMATIONS 一致（idle/idleBase/sleep/wake/cheer/alarm/click/drag/dragEnd），
+   * 未指定的键回退渲染端默认值；指定的动画名在骨架中必须存在才生效。
+   */
+  actions?: Record<string, string>
+  /**
+   * 相机取景需排除的槽位名（可选）。运行时 getBounds 不检查槽位 alpha，
+   * 常驻隐藏的道具槽位（如开拓者的垃圾桶三层）会把包围盒撑大、相机缩远。
+   * 只对列出的槽位生效，未声明的包行为不变。
+   */
+  cameraExcludeSlots?: string[]
   /** true = 不出现在包列表/切换菜单中（保留目录与历史配置） */
   hidden?: boolean
 }

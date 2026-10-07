@@ -20,7 +20,8 @@ function loadRenderer(win: BrowserWindow, windowName: string, tab?: string): voi
       query: {
         window: windowName,
         ...(tab ? { tab } : {}),
-        ...(process.env['SURF_TEST'] === '1' && windowName === 'pet' ? { forceSurf: '1' } : {})
+        ...(process.env['SURF_TEST'] === '1' && windowName === 'pet' ? { forceSurf: '1' } : {}),
+        ...(process.env['PET_DEBUG_BE'] === '1' ? { debugBe: '1' } : {})
       }
     })
   }
@@ -55,6 +56,13 @@ export function createPetWindow(position: { x: number; y: number; scale: number 
       nodeIntegration: false
     }
   })
+  if (process.env['PET_DEBUG_BE'] === '1') {
+    win.webContents.on('console-message', (_e, _level, message) =>
+      console.log('[renderer]', message))
+    win.webContents.on('render-process-gone', (_e, details) =>
+      console.log('[renderer-gone]', JSON.stringify(details)))
+    win.webContents.on('unresponsive', () => console.log('[renderer] unresponsive'))
+  }
   win.setAlwaysOnTop(true, 'screen-saver')
   win.on('closed', () => {
     if (petWindow === win) petWindow = null
