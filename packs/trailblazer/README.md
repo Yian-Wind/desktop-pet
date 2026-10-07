@@ -52,7 +52,13 @@
   偏移抵消、外观不变），张望摇摆绕头顶；盖中心对齐头顶冠部 `LID_SHIFT_X`
   （骨骼局部，父级 ×2）。盖子放大 1.19×（桶口沿条 575px vs 盖 514px）
 - 相机取景：manifest `cameraExcludeSlots` 排除桶三槽（运行时 getBounds 不检查
-  alpha，否则相机被撑远、角色变小）
+  alpha，否则相机被撑远、角色变小）；`cameraExtend.top=360` 为张望时高举的
+  桶盖预留顶部空间（盖子峰值 y≈1915 vs 未扩展可见顶 1567，否则被舞台边缘截断）。
+  扩展会使取景放大 zoom（宠物视觉缩小 ~17.5%），已用 `petScales.trailblazer`
+  0.6→0.73 补偿
+- 点击映射：`actions.click = idel_emoji1`（点击=表情一次性播放，2.3s 后回常态）。
+  注意渲染端 click 分支的**随机池只在包未声明 click 时生效**（`packActions['click']`
+  判定）——否则池被排空后会回退全局常量 `抬手示意` 导致点击无反应
 
 ### 动画清单（生成）
 

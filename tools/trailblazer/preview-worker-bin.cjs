@@ -96,6 +96,9 @@ window.renderFrames = async () => {
   }
   const bounds = skeleton.getBoundsRect();
   for (const [slot, att] of hiddenSlots) slot.setAttachment(att);
+  // 同应用端：cameraExtend（PV_EXTEND_TOP 传入，世界单位）
+  const EXT_TOP = ${Number(process.env.PV_EXTEND_TOP || 0)};
+  if (EXT_TOP) { bounds.height += EXT_TOP; }
   const state = new SPINE.AnimationState(new SPINE.AnimationStateData(skeletonData));
   const SETUP = ${process.env.PV_SETUP === '1' ? 'true' : 'false'};
   const HIDE_SLOTS = ${JSON.stringify((process.env.PV_HIDE_SLOTS || '').split(',').filter(Boolean))};
@@ -165,9 +168,13 @@ window.renderFrames = async () => {
         bminY.toFixed(0) + "," + bmaxY.toFixed(0) + "]");
       const lc = worldPts(skeleton.findSlot("BIN-LID"));
       if (lc) {
-        let lminY = 1e9, lmaxY = -1e9;
-        for (let k = 1; k < lc.length; k += 2) { lminY = Math.min(lminY, lc[k]); lmaxY = Math.max(lmaxY, lc[k]); }
-        console.log("[measure] LID y[" + lminY.toFixed(0) + "," + lmaxY.toFixed(0) + "]");
+        let lminY = 1e9, lmaxY = -1e9, lminX = 1e9, lmaxX = -1e9;
+        for (let k = 0; k < lc.length; k += 2) {
+          lminX = Math.min(lminX, lc[k]); lmaxX = Math.max(lmaxX, lc[k]);
+          lminY = Math.min(lminY, lc[k + 1]); lmaxY = Math.max(lmaxY, lc[k + 1]);
+        }
+        console.log("[measure] LID x[" + lminX.toFixed(0) + "," + lmaxX.toFixed(0) + "] y[" +
+          lminY.toFixed(0) + "," + lmaxY.toFixed(0) + "]");
       }
       if (MEASURE >= 3) {
         for (const b of skeleton.bones) {

@@ -34,6 +34,11 @@ export interface PetPackManifest {
    * 只对列出的槽位生效，未声明的包行为不变。
    */
   cameraExcludeSlots?: string[]
+  /**
+   * 取景范围扩展（世界单位，可选）。用于动画中越出 setup 包围盒的内容
+   * （如开拓者张望时高举的垃圾桶盖），否则会被舞台边缘截断。
+   */
+  cameraExtend?: { top?: number; right?: number; bottom?: number; left?: number }
   /** true = 不出现在包列表/切换菜单中（保留目录与历史配置） */
   hidden?: boolean
 }

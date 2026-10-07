@@ -3,7 +3,14 @@
   "name": "开拓者",
   "version": "0.1.0",
   "type": "spine",
-  "animations": ["idel", "idel_emoji1", "入桶", "桶内待机", "顶盖张望", "跳出炸开"],
+  "animations": [
+    "idel",
+    "idel_emoji1",
+    "入桶",
+    "桶内待机",
+    "顶盖张望",
+    "跳出炸开"
+  ],
   "defaultScale": 0.28,
   "author": "user",
   "assetPaths": {
@@ -20,5 +27,12 @@
     "cheer": "idel_emoji1",
     "alarm": "idel_emoji1"
   },
-  "cameraExcludeSlots": ["BIN-BACK", "BIN-FRONT", "BIN-LID"]
+  "cameraExcludeSlots": [
+    "BIN-BACK",
+    "BIN-FRONT",
+    "BIN-LID"
+  ],
+  "cameraExtend": {
+    "top": 360
+  }
 }

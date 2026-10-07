@@ -137,6 +137,8 @@ interface SpineRuntime {
   idleBaseAnimation: string
   // per-pack 动作映射（manifest.actions 合并渲染端默认值），见 PetPackManifest
   actionAnimations: Record<string, string>
+  // 包内**显式**声明的动作（未合并默认值）：用于区分"包声明了 click"与"回退默认"
+  packActions: Record<string, string>
   // 背手站姿的待机基底（loop背手）：仅姿势包（背手/解背手/loop背手 齐备），
   // null = 无站姿循环（背手停帧保持，不走姿势→循环切换）
   idleBasePoseAnimation: string | null
@@ -179,7 +181,8 @@ function createCombinedSkin(skeleton: Skeleton): Skin | null {
 // 未声明该字段的包行为与从前完全一致。
 function getDefaultVisibleBounds(
   skeleton: Skeleton,
-  excludeSlots: string[]
+  excludeSlots: string[],
+  extend?: { top?: number; right?: number; bottom?: number; left?: number }
 ): { x: number; y: number; width: number; height: number } {
   const hidden: Array<{ slot: NonNullable<ReturnType<Skeleton['findSlot']>>; attachment: Attachment }> = []
   for (const name of excludeSlots) {
@@ -193,6 +196,17 @@ function getDefaultVisibleBounds(
   const bounds = skeleton.getBoundsRect()
   for (const { slot, attachment } of hidden) {
     slot.setAttachment(attachment)
+  }
+  // 动画可能越出 setup 包围盒（如张望时高举的桶盖）→ 按声明扩展取景
+  if (extend) {
+    const top = extend.top ?? 0
+    const bottom = extend.bottom ?? 0
+    const left = extend.left ?? 0
+    const right = extend.right ?? 0
+    bounds.x -= left
+    bounds.y -= bottom
+    bounds.width += left + right
+    bounds.height += top + bottom
   }
   return bounds
 }
@@ -600,11 +614,16 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
             skeleton,
             state: animationState,
             spineCanvas: canvas,
-            bounds: getDefaultVisibleBounds(skeleton, pack.manifest.cameraExcludeSlots ?? []),
+            bounds: getDefaultVisibleBounds(
+              skeleton,
+              pack.manifest.cameraExcludeSlots ?? [],
+              pack.manifest.cameraExtend
+            ),
             currentAction: '',
             currentAnimationName: '',
             idleBaseAnimation,
             actionAnimations: { ...ACTION_ANIMATIONS, ...packActions },
+            packActions,
             idleBasePoseAnimation,
             swayTime: 0,
             dropSpringTime: null,
@@ -823,7 +842,8 @@ export function SpinePetVisual({ pack, state, blinkIntervalSeconds, hitTestRef, 
       animationName = runtime.skeleton.data.findAnimation(IDLE_ANIMATION)
         ? IDLE_ANIMATION
         : runtime.idleBaseAnimation
-    } else if (state.action === 'click') {
+    } else if (state.action === 'click' && !runtime.packActions['click']) {
+      // 包未声明点击动画 → 走随机池（玛拉妮/普罗米娅原行为）
       const choices = pack.manifest.animations.filter((name) => {
         return !CLICK_EXCLUDED_ANIMATIONS.has(name) && runtime.skeleton.data.findAnimation(name) !== null
       })
