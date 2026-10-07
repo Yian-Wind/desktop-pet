@@ -1,0 +1,24 @@
+{
+  "id": "trailblazer",
+  "name": "开拓者",
+  "version": "0.1.0",
+  "type": "spine",
+  "animations": ["idel", "idel_emoji1", "入桶", "桶内待机", "顶盖张望", "跳出炸开"],
+  "defaultScale": 0.28,
+  "author": "user",
+  "assetPaths": {
+    "skeleton": "trailblazer.json",
+    "atlas": "trailblazer.atlas",
+    "texture": "trailblazer.png"
+  },
+  "actions": {
+    "idle": "idel",
+    "idleBase": "idel",
+    "sleep": "入桶",
+    "wake": "跳出炸开",
+    "click": "idel_emoji1",
+    "cheer": "idel_emoji1",
+    "alarm": "idel_emoji1"
+  },
+  "cameraExcludeSlots": ["BIN-BACK", "BIN-FRONT", "BIN-LID"]
+}
